@@ -1,0 +1,45 @@
+# Pipeline runtime output (recreated by run_pipeline.sh)
+results/
+foldx/
+mpnn_outputs/
+his_seeds/
+esm_scores/
+logs/
+
+# Workspace - temporary working directory
+workspace/
+
+# Third-party tools (external dependencies, install separately)
+third_party/
+
+# Experiment data (large, keep locally)
+experiments/
+
+# Large structure files (PDB directories in analysis/)
+analysis/rosetta/mutants_n1-0/
+analysis/rosetta/1E62_pdb/
+analysis/rosetta/3E72/
+analysis/rosetta/sdab_pdb/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Claude Code working files
+.claude/
+.tasks/
+.agents/
+
+# Environment / secrets
+.env
+.env.*

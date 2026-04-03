@@ -1,0 +1,73 @@
+paths:
+  foldx_bin: third_party/foldx/foldx
+  pdb_dir: experiments/1E62/data
+  wt_dir: experiments/1E62/data
+  wt_files:
+    A: heavy.fasta
+    B: light.fasta
+    C: antigen.fasta
+  mpnn_out_dir: results/mpnn_outputs
+  his_seed_dir: results/his_seeds
+  esm_out_dir: results/esm_scores/n1-0
+  foldx_dir: foldx_main/n1-0
+  results_dir: results_foldx/n1-0/chain_A
+  mpnn_runner: third_party/ProteinMPNN/protein_mpnn_run.py
+design:
+  chain: A
+  region:
+  - 1
+  - 115
+  max_len: 40
+interface:
+  ab_chains:
+  - A
+  - B
+  ag_chains:
+  - C
+  cutoff: 5.0
+his_bias:
+  enable: true
+  min_his_in_region: 1
+  target_positions: []
+  prefer_sites_topk: 20
+  single_scan_aminoacids:
+  - H
+  pair_scan_limit: 1000
+screening:
+  keep_top_pct_per_pdb: 0.5
+  min_len: 110
+  max_len: 130
+esm:
+  device: cuda
+  batch_size: 128
+foldx:
+  ph_points:
+  - 7.4
+  - 6.0
+  number_of_runs: 1
+  analyse_groups: A,B;C
+resources:
+  mpnn_chunk_size: 50000
+  esm_chunk_size: 50000
+  foldx_chunk_size: 1
+  foldx_max_procs: 120
+  omp_threads: 1
+  checkpoint_every: 2000
+selection:
+  mode: adaptive
+  target_n: 10000
+  start:
+    dG74_max: -3.0
+    delta_min: 1.0
+  relax_step:
+    dG74_max: 0.5
+    delta_min: -0.25
+  floors:
+    dG74_max: 1.0
+    delta_min: 0.0
+  per_pdb_max_frac: 0.4
+  his_min_frac: 0.2
+  his_bonus: 0.2
+  alpha: 0.3
+  beta: 0.1
+  delta_delta_weight: 0.0
