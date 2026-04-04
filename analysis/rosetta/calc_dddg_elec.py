@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-批量计算dddG_elec（delta delta electrostatic ddG）
-基于论文方法：计算pH 5和pH 7条件下的静电ddG差异
+批量计算 dddG_elec (Debug Version)
+修复：只对突变引入的His进行pH5质子化，而非所有天然His
 
+原理：
 dddG_elec = ddG_elec(pH5) - ddG_elec(pH7)
-
-其中ddG_elec = E_elec(complex) - E_elec(binder) - E_elec(target)
+只对突变位点的His进行HIP替换，评估该位点的静电效应。
 """
 
 import sys
 import os
+import re
 import glob
-from collections import defaultdict
 import pandas as pd
 import pyrosetta
 from pyrosetta import Pose
@@ -20,88 +20,95 @@ from pyrosetta.rosetta.core.scoring import ScoreType, ScoreFunction
 from pyrosetta.rosetta.core.pack.task import TaskFactory
 from pyrosetta.rosetta.core.pack.task.operation import RestrictToRepacking
 from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
+from pyrosetta.rosetta.core.pose import replace_pose_residue_copying_existing_coordinates
+
+# ================= 用户配置区域 =================
+DEFAULT_BINDER_CHAINS = ["A", "B"]
+DEFAULT_TARGET_CHAINS = ["C"]
+# ===============================================
 
 
 class dddGElecCalculator:
-    """计算dddG_elec"""
-    
-    def __init__(self, pdb_path, binder_chains=["A", "B"], target_chains=["C"], verbose=False):
-        """
-        Args:
-            pdb_path: PDB文件路径
-            binder_chains: binder链ID列表(抗体重链和轻链)
-            target_chains: target链ID列表(抗原)
-            verbose: 是否打印详细信息
-        """
+    def __init__(self, pdb_path, binder_chains, target_chains, verbose=False):
         self.pdb_path = pdb_path
         self.binder_chains = set(binder_chains)
         self.target_chains = set(target_chains)
         self.verbose = verbose
-        
-        # 初始化PyRosetta（静默模式）
+
         if not hasattr(pyrosetta, '_initialized'):
             pyrosetta.init("-mute all")
             pyrosetta._initialized = True
-        
-        # 加载pose
-        self.pose = pyrosetta.pose_from_pdb(pdb_path)
-        
-        # 构建链ID映射
+
+        try:
+            self.pose = pyrosetta.pose_from_pdb(pdb_path)
+        except Exception as e:
+            raise RuntimeError(f"无法加载 PDB: {pdb_path} | 错误: {e}")
+
         self.chain_map = self._build_chain_map()
-        
-        # 创建只含fa_elec的ScoreFunction
+        self._validate_chains()
+
         self.sf_elec = ScoreFunction()
         self.sf_elec.set_weight(ScoreType.fa_elec, 1.0)
-        
+        self.sf_full = pyrosetta.get_score_function()
+
     def _build_chain_map(self):
-        """构建残基序号到PDB链ID的映射"""
         chain_map = {}
         pdb_info = self.pose.pdb_info()
         for i in range(1, self.pose.total_residue() + 1):
-            chain_id = pdb_info.chain(i)
-            chain_map[i] = chain_id
+            chain_map[i] = pdb_info.chain(i)
         return chain_map
-    
-    def _get_chain_residues(self, pose, chain_ids):
-        """获取指定链的残基索引列表"""
-        residues = []
-        pdb_info = pose.pdb_info()
+
+    def _validate_chains(self):
+        existing = set(self.chain_map.values())
+        if not self.binder_chains.issubset(existing):
+            raise ValueError(f"Binder 链缺失. 需: {self.binder_chains}, 存: {existing}")
+        if not self.target_chains.issubset(existing):
+            raise ValueError(f"Target 链缺失. 需: {self.target_chains}, 存: {existing}")
+
+    def _parse_mutation_site(self, pdb_name):
+        """
+        从文件名解析突变位点
+        支持格式: A_K50H.pdb, B_Y31H.pdb 等
+        返回: (chain, resno) 或 (None, None)
+        """
+        name = pdb_name.replace('.pdb', '')
+        # 匹配: 链_野生型残基+位置+H
+        m = re.match(r'^([A-Z])_([A-Z])(\d+)H$', name)
+        if m:
+            chain, wt_aa, resno = m.groups()
+            return chain, int(resno)
+        return None, None
+
+    def _find_rosetta_index(self, chain, resno):
+        """将PDB链+残基号转换为Rosetta内部索引"""
+        pdb_info = self.pose.pdb_info()
+        for i in range(1, self.pose.total_residue() + 1):
+            if pdb_info.chain(i) == chain and pdb_info.number(i) == resno:
+                return i
+        return None
+
+    def _get_all_histidine_residues(self, pose):
+        """获取所有His残基（用于统计）"""
+        his_indices = []
         for i in range(1, pose.total_residue() + 1):
-            if pdb_info.chain(i) in chain_ids:
-                residues.append(i)
-        return residues
-    
-    def _get_histidine_residues(self, pose):
-        """获取所有His残基的索引"""
-        his_residues = []
-        for i in range(1, pose.total_residue() + 1):
-            if pose.residue(i).name3().startswith("HIS"):
-                his_residues.append(i)
-        return his_residues
-    
+            n = pose.residue(i).name3()
+            if n.startswith("HIS") or n in ("HIP", "HID", "HIE"):
+                his_indices.append(i)
+        return his_indices
+
     def _extract_chains(self, pose, chain_ids):
-        """提取指定链创建新pose"""
-        from pyrosetta.rosetta.core.pose import Pose as RosettaPose
         from pyrosetta.rosetta.core.pose import append_subpose_to_pose
-        
         new_pose = Pose()
         pdb_info = pose.pdb_info()
-        
-        # 找到要保留的残基
-        residues_to_keep = []
-        for i in range(1, pose.total_residue() + 1):
-            if pdb_info.chain(i) in chain_ids:
-                residues_to_keep.append(i)
-        
-        if not residues_to_keep:
+        residues = [i for i in range(1, pose.total_residue() + 1) if pdb_info.chain(i) in chain_ids]
+
+        if not residues:
             return new_pose
-        
-        # 使用slice方式提取
-        # 找连续区段
+
         segments = []
-        start = residues_to_keep[0]
+        start = residues[0]
         end = start
-        for r in residues_to_keep[1:]:
+        for r in residues[1:]:
             if r == end + 1:
                 end = r
             else:
@@ -109,330 +116,287 @@ class dddGElecCalculator:
                 start = r
                 end = r
         segments.append((start, end))
-        
-        # 提取第一个segment
-        first_start, first_end = segments[0]
-        new_pose = Pose(pose, first_start, first_end)
-        
-        # 追加其他segments
-        for seg_start, seg_end in segments[1:]:
-            temp_pose = Pose(pose, seg_start, seg_end)
-            append_subpose_to_pose(new_pose, temp_pose, 1, temp_pose.total_residue())
-        
+
+        if segments:
+            s0, e0 = segments[0]
+            new_pose = Pose(pose, s0, e0)
+            for s, e in segments[1:]:
+                sub = Pose(pose, s, e)
+                append_subpose_to_pose(new_pose, sub, 1, sub.total_residue())
         return new_pose
-    
-    def _repack_pose(self, pose):
-        """对pose进行repack"""
+
+    def _repack_focused(self, pose, focus_residues=None):
         pose_copy = Pose()
         pose_copy.assign(pose)
-        
-        # 创建TaskFactory，只允许repack不允许design
+
         tf = TaskFactory()
         tf.push_back(RestrictToRepacking())
-        
         packer_task = tf.create_task_and_apply_taskoperations(pose_copy)
-        
-        # 使用标准ScoreFunction进行repack
-        sf_full = pyrosetta.get_score_function()
-        
-        packer = PackRotamersMover(sf_full)
+
+        if focus_residues is not None:
+            focus_set = set(focus_residues)
+            for i in range(1, pose_copy.total_residue() + 1):
+                if i not in focus_set:
+                    packer_task.nonconst_residue_task(i).prevent_repacking()
+
+        packer = PackRotamersMover(self.sf_full)
         packer.task_factory(tf)
         packer.apply(pose_copy)
-        
         return pose_copy
-    
-    def _repack_his_only(self, pose, ph_value):
+
+    def _simulate_ph5_his_charge(self, pose, target_residues=None):
         """
-        只对His残基进行repack
-        pH 5时His按双质子化处理（通过设置pH模式）
+        只对指定残基进行HIP替换（模拟pH5质子化）
+        
+        Args:
+            pose: 输入pose
+            target_residues: 要质子化的残基索引列表。如果None则不处理任何残基。
         """
         pose_copy = Pose()
         pose_copy.assign(pose)
+
+        if target_residues is None or len(target_residues) == 0:
+            if self.verbose:
+                print("  > 无目标残基需要质子化")
+            return pose_copy, None
+
+        # 验证目标残基确实是His
+        valid_targets = []
+        for idx in target_residues:
+            if idx is None:
+                continue
+            n = pose_copy.residue(idx).name3()
+            if n.startswith("HIS") or n in ("HIP", "HID", "HIE"):
+                valid_targets.append(idx)
+            elif self.verbose:
+                print(f"  > Warning: 位置 {idx} 不是His ({n})，跳过")
+
+        if not valid_targets:
+            if self.verbose:
+                print("  > 无有效His残基需要质子化")
+            return pose_copy, None
+
+        # 获取HIP残基类型
+        rsd_set = pose_copy.residue_type_set_for_pose()
+        target_name = None
+        if rsd_set.has_name("HIP"):
+            target_name = "HIP"
+        elif rsd_set.has_name("HIS_D"):
+            target_name = "HIS_D"
+        else:
+            raise RuntimeError("数据库中未找到 HIP 或 HIS_D")
+
+        target_type = rsd_set.name_map(target_name)
+
+        # 记录替换前后的状态用于诊断
+        diag_info = {}
         
-        # 获取His残基
-        his_residues = self._get_histidine_residues(pose_copy)
-        
-        if not his_residues:
-            return pose_copy
-        
-        # 创建TaskFactory
-        from pyrosetta.rosetta.core.pack.task.operation import PreventRepacking
-        
-        tf = TaskFactory()
-        tf.push_back(RestrictToRepacking())
-        
-        packer_task = tf.create_task_and_apply_taskoperations(pose_copy)
-        
-        # 只允许His残基repack
-        for i in range(1, pose_copy.total_residue() + 1):
-            if i not in his_residues:
-                packer_task.nonconst_residue_task(i).prevent_repacking()
-        
-        # 使用标准ScoreFunction进行repack
-        sf_full = pyrosetta.get_score_function()
-        
-        packer = PackRotamersMover(sf_full)
-        packer.apply(pose_copy)
-        
-        return pose_copy
-    
-    def _calc_elec_energy(self, pose):
-        """计算fa_elec能量"""
-        return self.sf_elec(pose)
-    
-    def _calc_ddg_elec(self, pose):
-        """
-        计算静电ddG
-        ddG_elec = E_elec(complex) - E_elec(binder) - E_elec(target)
-        """
-        # 复合物能量
-        E_complex = self._calc_elec_energy(pose)
-        
-        # 提取binder和target
-        binder_pose = self._extract_chains(pose, self.binder_chains)
-        target_pose = self._extract_chains(pose, self.target_chains)
-        
-        if binder_pose.total_residue() == 0 or target_pose.total_residue() == 0:
-            return None, None, None
-        
-        # 分别计算能量
-        E_binder = self._calc_elec_energy(binder_pose)
-        E_target = self._calc_elec_energy(target_pose)
-        
-        ddG_elec = E_complex - E_binder - E_target
-        
-        return ddG_elec, E_complex, E_binder, E_target
-    
-    def _simulate_ph5_his_charge(self, pose):
-        """
-        模拟pH 5条件下His的质子化
-        通过尝试将HIS替换为HIS_D（双质子化）
-        如果失败则返回原pose
-        """
-        pose_copy = Pose()
-        pose_copy.assign(pose)
-        
-        his_residues = self._get_histidine_residues(pose_copy)
-        
-        for his_idx in his_residues:
+        for idx in valid_targets:
+            # 替换前状态
+            res_before = pose_copy.residue(idx)
+            name_before = res_before.name3()
+            natoms_before = res_before.natoms()
+            
             try:
-                # 尝试替换为双质子化His
-                res_type_set = pose_copy.residue(his_idx).residue_type_set()
+                replace_pose_residue_copying_existing_coordinates(pose_copy, idx, target_type)
                 
-                # 尝试不同的双质子化His名称
-                for his_type in ["HIS_D", "HIP", "HSP", "HIS:protonated"]:
-                    try:
-                        new_type = res_type_set.name_map(his_type)
-                        pyrosetta.rosetta.core.pose.replace_pose_residue_copying_existing_coordinates(
-                            pose_copy, his_idx, new_type
-                        )
-                        break
-                    except:
-                        continue
-            except:
-                # 如果替换失败，继续使用原类型
-                pass
-        
-        return pose_copy
-    
-    def calculate_dddg_elec(self):
-        """
-        计算dddG_elec
-        
-        Returns:
-            dict: 包含各项计算结果
-        """
+                # 替换后状态
+                res_after = pose_copy.residue(idx)
+                name_after = res_after.name3()
+                natoms_after = res_after.natoms()
+                
+                diag_info[idx] = {
+                    "before": name_before,
+                    "after": name_after,
+                    "atoms_before": natoms_before,
+                    "atoms_after": natoms_after,
+                    "success": name_after != name_before
+                }
+                
+            except Exception as e:
+                diag_info[idx] = {"error": str(e)}
+
+        # 更新Pose状态
+        try:
+            pose_copy.conformation().detect_disulfides()
+            pose_copy.update_residue_neighbors()
+        except:
+            pass
+
+        return pose_copy, diag_info
+
+    def _calc_components(self, pose):
+        E_c = self.sf_elec(pose)
+        binder = self._extract_chains(pose, self.binder_chains)
+        target = self._extract_chains(pose, self.target_chains)
+
+        if binder.total_residue() == 0 or target.total_residue() == 0:
+            return None, None, None
+
+        return E_c, self.sf_elec(binder), self.sf_elec(target)
+
+    def run(self):
+        pdb_name = os.path.basename(self.pdb_path)
         if self.verbose:
-            print(f"处理: {os.path.basename(self.pdb_path)}")
+            print(f"Processing: {pdb_name}")
+
+        # 解析突变位点
+        mut_chain, mut_resno = self._parse_mutation_site(pdb_name)
+        mutation_idx = None
         
-        # 先对整体结构进行repack
-        pose_repacked = self._repack_pose(self.pose)
-        
-        # pH 7.4条件：使用默认His状态
-        pose_ph7 = Pose()
-        pose_ph7.assign(pose_repacked)
-        
-        # 对His进行repack（pH 7.4条件）
-        pose_ph7 = self._repack_his_only(pose_ph7, 7.4)
-        
-        # 计算pH 7.4的ddG_elec
-        result_ph7 = self._calc_ddg_elec(pose_ph7)
-        if result_ph7[0] is None:
+        if mut_chain and mut_resno:
+            mutation_idx = self._find_rosetta_index(mut_chain, mut_resno)
+            if self.verbose:
+                print(f"  > 突变位点: {mut_chain}_{mut_resno} -> Rosetta idx: {mutation_idx}")
+        else:
+            if self.verbose:
+                print(f"  > Warning: 无法从文件名解析突变位点")
+
+        # 统计总His数
+        all_his = self._get_all_histidine_residues(self.pose)
+        n_his_total = len(all_his)
+
+        # 1. 预处理 (repack)
+        pose_ph7 = self._repack_focused(self.pose, focus_residues=None)
+
+        # 2. pH 7 计算
+        ec7, eb7, et7 = self._calc_components(pose_ph7)
+        if ec7 is None:
+            return {"pdb_name": pdb_name, "status": "error", "error": "pH7 extraction failed"}
+        ddG_ph7 = ec7 - eb7 - et7
+
+        # 3. 模拟 pH 5（只对突变位点质子化）
+        if mutation_idx is None:
             return {
-                "dddG_elec": None,
-                "ddG_elec_pH7": None,
-                "ddG_elec_pH5": None,
-                "error": "Failed to extract chains"
+                "pdb_name": pdb_name,
+                "status": "error",
+                "error": "无法定位突变位点",
+                "n_his_total": n_his_total
             }
-        ddG_elec_pH7, E_complex_pH7, E_binder_pH7, E_target_pH7 = result_ph7
+
+        # 验证突变位点是否为His
+        res_at_site = pose_ph7.residue(mutation_idx).name3()
+        is_his = res_at_site.startswith("HIS") or res_at_site in ("HIP", "HID", "HIE")
         
-        # pH 5.0条件：尝试模拟His双质子化
-        pose_ph5 = self._simulate_ph5_his_charge(pose_repacked)
-        
-        # 对His进行repack（pH 5.0条件）
-        pose_ph5 = self._repack_his_only(pose_ph5, 5.0)
-        
-        # 计算pH 5.0的ddG_elec
-        result_ph5 = self._calc_ddg_elec(pose_ph5)
-        if result_ph5[0] is None:
+        if not is_his:
             return {
-                "dddG_elec": None,
-                "ddG_elec_pH7": ddG_elec_pH7,
-                "ddG_elec_pH5": None,
-                "error": "Failed to extract chains at pH5"
+                "pdb_name": pdb_name,
+                "status": "error",
+                "error": f"突变位点{mutation_idx}不是His，而是{res_at_site}（PDB可能是野生型）",
+                "res_at_site": res_at_site,
+                "rosetta_idx": mutation_idx
             }
-        ddG_elec_pH5, E_complex_pH5, E_binder_pH5, E_target_pH5 = result_ph5
         
-        # 计算dddG_elec
-        dddG_elec = ddG_elec_pH5 - ddG_elec_pH7
-        
-        # 统计His数量
-        his_residues = self._get_histidine_residues(self.pose)
-        binder_his = [h for h in his_residues if self.chain_map.get(h) in self.binder_chains]
-        
+        try:
+            pose_ph5_raw, diag_info = self._simulate_ph5_his_charge(pose_ph7, target_residues=[mutation_idx])
+        except RuntimeError as e:
+            return {"pdb_name": pdb_name, "status": "error", "error": str(e)}
+
+        # 提取诊断信息
+        replace_success = False
+        res_before = res_at_site
+        res_after = res_at_site
+        if diag_info and mutation_idx in diag_info:
+            d = diag_info[mutation_idx]
+            if "error" not in d:
+                res_before = d.get("before", "?")
+                res_after = d.get("after", "?")
+                replace_success = d.get("success", False)
+
+        # 4. pH 5 Repack
+        try:
+            pose_ph5 = self._repack_focused(pose_ph5_raw, focus_residues=[mutation_idx])
+        except Exception as e:
+            return {"pdb_name": pdb_name, "status": "error", "error": f"Repack failed: {e}"}
+
+        # 5. pH 5 计算
+        ec5, eb5, et5 = self._calc_components(pose_ph5)
+        if ec5 is None:
+            return {"pdb_name": pdb_name, "status": "error", "error": "pH5 extraction failed"}
+        ddG_ph5 = ec5 - eb5 - et5
+
         return {
-            "dddG_elec": dddG_elec,
-            "ddG_elec_pH7": ddG_elec_pH7,
-            "ddG_elec_pH5": ddG_elec_pH5,
-            "E_complex_pH7": E_complex_pH7,
-            "E_binder_pH7": E_binder_pH7,
-            "E_target_pH7": E_target_pH7,
-            "E_complex_pH5": E_complex_pH5,
-            "E_binder_pH5": E_binder_pH5,
-            "E_target_pH5": E_target_pH5,
-            "n_histidines_total": len(his_residues),
-            "n_histidines_binder": len(binder_his),
+            "pdb_name": pdb_name,
+            "status": "success",
+            "mutation": f"{mut_chain}_{mut_resno}H",
+            "rosetta_idx": mutation_idx,
+            "res_before": res_before,
+            "res_after": res_after,
+            "replace_ok": replace_success,
+            "dddG_elec": ddG_ph5 - ddG_ph7,
+            "ddG_elec_pH7": ddG_ph7,
+            "ddG_elec_pH5": ddG_ph5,
+            "delta_E_complex": ec5 - ec7,
+            "n_his_total": n_his_total,
             "error": None
         }
 
 
-def batch_calculate_dddg_elec(pdb_dir, output_csv=None, verbose=False):
-    """
-    批量计算目录下所有PDB的dddG_elec
-    
-    Args:
-        pdb_dir: PDB文件目录
-        output_csv: 输出CSV路径（默认为代码所在目录下的dddg_elec_scores.csv）
-        verbose: 是否打印详细信息
-    """
-    # 查找所有PDB文件
+def batch_process(pdb_dir, output_csv):
     pdb_files = glob.glob(os.path.join(pdb_dir, "*.pdb"))
-    
     if not pdb_files:
-        print(f"错误: 在 {pdb_dir} 下没有找到PDB文件")
+        print(f"错误: {pdb_dir} 为空")
         return
-    
-    print(f"找到 {len(pdb_files)} 个PDB文件")
-    
-    # 准备结果列表
+
+    print(f"开始处理 {len(pdb_files)} 个文件 | Binder:{DEFAULT_BINDER_CHAINS} Target:{DEFAULT_TARGET_CHAINS}")
+    print("=" * 70)
+    print("【Debug模式】只对突变位点进行pH5质子化，输出诊断信息")
+    print("=" * 70)
+
     results = []
-    
-    # 逐个处理
-    for i, pdb_path in enumerate(sorted(pdb_files), 1):
-        pdb_name = os.path.basename(pdb_path)
-        print(f"[{i}/{len(pdb_files)}] 处理 {pdb_name}...", end=" ")
-        
+    for i, f in enumerate(sorted(pdb_files), 1):
+        name = os.path.basename(f)
+        print(f"[{i}/{len(pdb_files)}] {name}...", end="", flush=True)
+
         try:
-            calc = dddGElecCalculator(
-                pdb_path=pdb_path,
-                binder_chains=["A", "B"],
-                target_chains=["C"],
-                # binder_chains=["A"],
-                # target_chains=["B"],
-                verbose=verbose
-            )
-            
-            result = calc.calculate_dddg_elec()
-            
-            # 构建一行数据
-            row = {
-                "pdb_name": pdb_name,
-                "status": "success" if result["error"] is None else f"error: {result['error']}",
-                "dddG_elec": result["dddG_elec"],
-                "ddG_elec_pH7": result["ddG_elec_pH7"],
-                "ddG_elec_pH5": result["ddG_elec_pH5"],
-                "E_complex_pH7": result.get("E_complex_pH7"),
-                "E_binder_pH7": result.get("E_binder_pH7"),
-                "E_target_pH7": result.get("E_target_pH7"),
-                "E_complex_pH5": result.get("E_complex_pH5"),
-                "E_binder_pH5": result.get("E_binder_pH5"),
-                "E_target_pH5": result.get("E_target_pH5"),
-                "n_histidines_total": result.get("n_histidines_total"),
-                "n_histidines_binder": result.get("n_histidines_binder"),
-            }
-            
-            results.append(row)
-            
-            if result["dddG_elec"] is not None:
-                print(f"✓ dddG_elec={result['dddG_elec']:.3f}")
+            calc = dddGElecCalculator(f, DEFAULT_BINDER_CHAINS, DEFAULT_TARGET_CHAINS)
+            res = calc.run()
+
+            if res.get("error"):
+                print(f" ❌ {res['error']}")
             else:
-                print(f"✗ {result['error']}")
-            
+                # 显示诊断信息
+                replace_ok = "✓" if res.get('replace_ok') else "✗"
+                print(f" {res['res_before']}->{res['res_after']}[{replace_ok}] dddG={res['dddG_elec']:+.4f}")
+            results.append(res)
+
         except Exception as e:
-            print(f"✗ 失败: {str(e)}")
-            row = {
-                "pdb_name": pdb_name,
-                "status": f"error: {str(e)}",
-                "dddG_elec": None,
-                "ddG_elec_pH7": None,
-                "ddG_elec_pH5": None,
-                "E_complex_pH7": None,
-                "E_binder_pH7": None,
-                "E_target_pH7": None,
-                "E_complex_pH5": None,
-                "E_binder_pH5": None,
-                "E_target_pH5": None,
-                "n_histidines_total": None,
-                "n_histidines_binder": None,
-            }
-            results.append(row)
-    
-    # 转为DataFrame
+            print(f" ❌ Error: {e}")
+            results.append({"pdb_name": name, "status": "error", "error": str(e)})
+
     df = pd.DataFrame(results)
-    
-    # 调整列顺序
-    cols = [
-        "pdb_name", "status", 
-        "dddG_elec", "ddG_elec_pH7", "ddG_elec_pH5",
-        "E_complex_pH7", "E_binder_pH7", "E_target_pH7",
-        "E_complex_pH5", "E_binder_pH5", "E_target_pH5",
-        "n_histidines_total", "n_histidines_binder"
-    ]
-    df = df[cols]
-    
-    # 输出CSV
-    if output_csv is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_csv = os.path.join(script_dir, "dddg_elec_scores.csv")
-    
+    cols = ["pdb_name", "status", "mutation", "rosetta_idx", 
+            "res_before", "res_after", "replace_ok",
+            "dddG_elec", "ddG_elec_pH7", "ddG_elec_pH5", 
+            "delta_E_complex", "n_his_total", "error"]
+    df = df[[c for c in cols if c in df.columns]]
     df.to_csv(output_csv, index=False)
+    print(f"\n完成。结果已保存: {output_csv}")
     
-    print(f"\n{'='*60}")
-    print(f"完成！共处理 {len(pdb_files)} 个PDB文件")
-    print(f"成功: {len([r for r in results if 'success' in r['status']])} 个")
-    print(f"失败: {len([r for r in results if 'success' not in r['status']])} 个")
-    print(f"结果已保存到: {output_csv}")
-    print(f"{'='*60}")
-    
-    return df
-
-
-def main():
-    if len(sys.argv) < 2:
-        print("用法: python batch_calc_dddg_elec.py <pdb_directory> [output_csv]")
-        print("示例: python batch_calc_dddg_elec.py ./pdbs/")
-        print("      python batch_calc_dddg_elec.py ./pdbs/ results.csv")
-        sys.exit(1)
-    
-    pdb_dir = sys.argv[1]
-    output_csv = sys.argv[2] if len(sys.argv) > 2 else None
-    
-    if not os.path.isdir(pdb_dir):
-        print(f"错误: {pdb_dir} 不是有效的目录")
-        sys.exit(1)
-    
-    batch_calculate_dddg_elec(pdb_dir, output_csv, verbose=False)
+    # 诊断统计
+    success = df[df['status'] == 'success']
+    if len(success) > 0:
+        print(f"\n===== 诊断统计 (n={len(success)}) =====")
+        
+        # 替换成功率
+        replace_ok_count = success['replace_ok'].sum() if 'replace_ok' in success.columns else 0
+        print(f"残基替换成功: {replace_ok_count}/{len(success)}")
+        
+        # res_before/after 分布
+        if 'res_before' in success.columns:
+            print(f"替换前残基类型: {success['res_before'].value_counts().to_dict()}")
+        if 'res_after' in success.columns:
+            print(f"替换后残基类型: {success['res_after'].value_counts().to_dict()}")
+        
+        # dddG统计
+        print(f"\ndddG_elec 范围: [{success['dddG_elec'].min():.4f}, {success['dddG_elec'].max():.4f}]")
+        print(f"dddG_elec 唯一值: {success['dddG_elec'].round(4).nunique()}")
+        near_zero = (success['dddG_elec'].abs() < 1e-6).sum()
+        print(f"dddG_elec ≈ 0: {near_zero}/{len(success)}")
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        print("Usage: python calc_dddg_elec_debug.py <pdb_dir> [output.csv]")
+        sys.exit(1)
+    batch_process(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "dddg_elec_debug_results.csv")
