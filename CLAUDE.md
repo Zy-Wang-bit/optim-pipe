@@ -67,3 +67,11 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 - 实验数据放 `experiments/<系统>/<轮次>/`，分析代码放 `analysis/`
 - 新增外部工具放 `third_party/`
 - Pipeline 运行时输出（results/, foldx/, logs/ 等）由 .gitignore 管理，不提交
+
+## 注意事项
+
+- 所有脚本必须从仓库根目录运行（使用相对路径如 `mpnn_outputs/`、`foldx/`）
+- FoldX 要求 PDB 文件复制到工作目录，脚本已自动处理
+- 突变命名有多种格式（R1 `A_E1H`、R3 `H1E>H`、FoldX `SA40A`）。最终数据文件统一为 `HE1H` 格式；可按“突变后氨基酸 + 链/位点 + 突变后氨基酸”的方式理解。具体示例：同一个 E1→H 突变在 R1 中可写作 `A_E1H`，在 R3 中可写作 `H1E>H`，统一后记为 `HE1H`；具体转换规则见 `analysis/naming/convert.py`
+- 多 PDB 模板设计：per-template 配置在 `configs/config_foldx_n*.yaml`
+- ProteinMPNN 和 SimpleFold 通过外部子进程调用，分别需要 `proteinmpnn` 和 `simplefold` conda 环境
