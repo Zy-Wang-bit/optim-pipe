@@ -1,6 +1,7 @@
 # Pipeline runtime output (recreated by run_pipeline.sh)
 results/
 foldx/
+phase_c/
 mpnn_outputs/
 his_seeds/
 esm_scores/

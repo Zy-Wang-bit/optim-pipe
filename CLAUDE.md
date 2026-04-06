@@ -13,14 +13,41 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 
 | 目录 | 职责 |
 |------|------|
-| `scripts/` | 核心 pipeline 脚本（8 步） |
+| `scripts/` | 核心 pipeline 脚本（4 Phase / 12 Step） |
 | `configs/` | YAML 配置文件 |
 | `analysis/` | 后分析代码（pKa、Rosetta、RMSD、ELISA 关联） |
 | `experiments/` | 按抗体系统/轮次组织的实验数据 |
+| `phase_c/` | Phase C 运行时输出（structures/、pka/、rosetta/、rmsd/） |
 | `docs/` | 路线图、设计文档、分析报告 |
 | `third_party/` | 外部工具（FoldX、ProteinMPNN、SimpleFold、MD） |
 | `archive/` | 历史归档 |
 | `.tasks/` | 跨对话任务管理 |
+
+## Pipeline 结构 (4 Phase / 12 Step)
+
+```
+Phase A: 序列生成（Step 1-3）
+  1. scan_interface.py       接口热点扫描
+  2. run_mpnn_design.py      MPNN 设计 + His 种子
+  3. run_esm_chunk.py        ESM 评分 + 候选筛选
+
+Phase B: FoldX 能量评估（Step 4-7）
+  4. repair_pdbs.py          RepairPDB
+  5. precompute_wt_ac.py     WT 基线
+  6. make_mutlist_chunk.py   批次生成
+  7. run_foldx_batch.py      BuildModel + AC
+
+Phase C: 多维度评估（Step 8-11，可选，phase_c.enabled 控制）
+  8. build_structures.py     PyRosetta/SimpleFold 结构生成
+  9. run_pka.py              PROPKA3 + pKAI+ pKa 预测
+  10. run_rosetta_eval.py    pH-score + dddG_elec
+  11. run_rmsd.py            CDR RMSD
+
+Phase D: 数据合并（Step 12）
+  12. merge_and_select.py    合并所有指标 → final_top10k.csv + merged_all.csv
+```
+
+Phase C 关闭时（`phase_c.enabled: false`），行为与原 8 步 pipeline 完全一致。
 
 ## 任务管理
 
@@ -66,7 +93,7 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 - 配置路径统一使用 `configs/config.yaml`，不硬编码绝对路径
 - 实验数据放 `experiments/<系统>/<轮次>/`，分析代码放 `analysis/`
 - 新增外部工具放 `third_party/`
-- Pipeline 运行时输出（results/, foldx/, logs/ 等）由 .gitignore 管理，不提交
+- Pipeline 运行时输出（results/, foldx/, phase_c/, logs/ 等）由 .gitignore 管理，不提交
 
 ## 注意事项
 
@@ -75,3 +102,5 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 - 突变命名有多种格式（R1 `A_E1H`、R3 `H1E>H`、FoldX `SA40A`）。最终数据文件统一为 `HE1H` 格式；可按“突变后氨基酸 + 链/位点 + 突变后氨基酸”的方式理解。具体示例：同一个 E1→H 突变在 R1 中可写作 `A_E1H`，在 R3 中可写作 `H1E>H`，统一后记为 `HE1H`；具体转换规则见 `analysis/naming/convert.py`
 - 多 PDB 模板设计：per-template 配置在 `configs/config_foldx_n*.yaml`
 - ProteinMPNN 和 SimpleFold 通过外部子进程调用，分别需要 `proteinmpnn` 和 `simplefold` conda 环境
+- Phase C Step 8/10 需要 `pyrosetta` 环境，Step 9/11 在主环境 `optim-pipe` 中运行
+- Phase C 配置在 `configs/config.yaml` 的 `phase_c` 段，默认关闭

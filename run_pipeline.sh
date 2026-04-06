@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键顺序跑：MPNN → ESM-1b → FoldX（修复 / WT / 批次 / 评估）→ 合并筛选
+# 一键顺序跑：MPNN → ESM-1b → FoldX → [Phase C 评估] → 合并筛选 (4 Phase / 12 Step)
 # 用法：
 #   bash run_pipeline.sh [CONFIG]             # 正常跑
 #   CLEAN=1 bash run_pipeline.sh [CONFIG]     # 先清理旧产物再跑
@@ -34,7 +34,8 @@ if [[ "${CLEAN:-0}" == "1" ]]; then
   note "清理旧产物（保留 experiments/1E62/data 和 experiments/1E62/data）…"
   rm -rf mpnn_outputs/* his_seeds/* esm_scores/* \
          foldx/repaired/* foldx/batches/* \
-         results/screening/* results/final_top10k.csv \
+         results/screening/* results/final_top10k.csv results/merged_all.csv \
+         phase_c/structures/* phase_c/pka/* phase_c/rosetta/* phase_c/rmsd/* \
          logs/processed_batches.json \
          configs/mpnn/chain_id.jsonl configs/mpnn/fixed_positions.jsonl || true
   ok "清理完成。"
@@ -42,7 +43,8 @@ fi
 
 # 基础检查 & 目录
 [[ -f "$CFG" ]] || { echo "[ERR] 找不到配置：$CFG" | tee -a "$LOG"; exit 1; }
-mkdir -p results/screening foldx/repaired foldx/batches esm_scores mpnn_outputs his_seeds configs/mpnn
+mkdir -p results/screening foldx/repaired foldx/batches esm_scores mpnn_outputs his_seeds configs/mpnn \
+         phase_c/structures phase_c/pka phase_c/rosetta phase_c/rmsd
 
 # 1) 接口热点扫描（生成 results/screening/his_hotspots.csv）
 note "Step 1: 接口热点扫描（His 偏向位点识别）"
@@ -79,8 +81,43 @@ note "Step 7: FoldX 评估（两点 pH）"
 run python scripts/run_foldx_batch.py "$CFG"
 ok "各批次 foldx_summary.csv 就绪。"
 
-# 8) 合并 & 自适应筛选（输出 results/final_top10k.csv，并包含 WT 对比）
-note "Step 8: 合并与自适应筛选（含 WT 对比）"
+# ── Phase C: 多维度评估（可选）──────────────────────────────────────────────
+PHASE_C=$(python3 -c "
+import yaml; c=yaml.safe_load(open('${CFG}'))
+print(str(c.get('phase_c',{}).get('enabled',False)).lower())
+")
+
+if [[ "$PHASE_C" == "true" ]]; then
+    # 先运行一次 merge 生成 Phase C 候选列表
+    note "Step 7.5: 预合并（生成 Phase C 候选列表）"
+    run python scripts/merge_and_select.py "$CFG"
+    ok "Phase C 候选列表就绪。"
+
+    # 8) 结构生成
+    note "Step 8: Phase C - 结构生成"
+    run conda run -n pyrosetta python scripts/build_structures.py "$CFG"
+    ok "突变体结构就绪。"
+
+    # 9) pKa 预测
+    note "Step 9: Phase C - pKa 预测"
+    run python scripts/run_pka.py "$CFG"
+    ok "pKa 预测就绪。"
+
+    # 10) Rosetta 评分
+    note "Step 10: Phase C - Rosetta 评分（pH-score + dddG_elec）"
+    run conda run -n pyrosetta python scripts/run_rosetta_eval.py "$CFG"
+    ok "Rosetta 评分就绪。"
+
+    # 11) CDR RMSD
+    note "Step 11: Phase C - CDR RMSD"
+    run python scripts/run_rmsd.py "$CFG"
+    ok "CDR RMSD 就绪。"
+else
+    note "Phase C 已禁用，跳过 Steps 8-11。"
+fi
+
+# 12) 最终合并 & 筛选
+note "Step 12: 合并与自适应筛选（含 WT 对比 + Phase C 评估）"
 run python scripts/merge_and_select.py "$CFG"
 ok "最终结果 -> results/final_top10k.csv"
 

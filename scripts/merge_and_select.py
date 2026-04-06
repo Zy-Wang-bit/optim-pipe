@@ -3,6 +3,7 @@ import os, sys, glob, json, yaml
 import pandas as pd
 import numpy as np
 from math import ceil
+from pathlib import Path
 
 def _paths(cfg):
     p = cfg.get("paths", {})
@@ -66,6 +67,70 @@ def _attach_meta(fx, meta, screen_dir):
     else:
         merged["esm_norm"] = 0.0
     merged.to_csv(os.path.join(screen_dir,"foldx_merged.csv"), index=False)
+    return merged
+
+def _attach_phase_c(merged, cfg):
+    """左连接 Phase C 结果 (pKa, Rosetta, RMSD)。未启用或无结果时返回原 df。"""
+    pc = cfg.get("phase_c", {})
+    if not pc.get("enabled", False):
+        return merged
+
+    pc_dir = pc.get("paths", {}).get("phase_c_dir", "phase_c")
+
+    map_csv = os.path.join(pc_dir, "structures", "mutant_map.csv")
+    if not os.path.exists(map_csv):
+        print("[Phase C] mutant_map.csv 未找到，跳过 Phase C 合并")
+        return merged
+
+    # 为 merged 添加 variant_id 列 (从 mpdb 列取 stem)
+    if "mpdb" in merged.columns:
+        merged["variant_id"] = merged["mpdb"].apply(
+            lambda x: Path(str(x)).stem if pd.notna(x) else None
+        )
+    else:
+        print("[Phase C] merged 缺少 mpdb 列，无法建立映射")
+        return merged
+
+    def _rename_vid(df):
+        if "variant_name" in df.columns and "variant_id" not in df.columns:
+            df = df.rename(columns={"variant_name": "variant_id"})
+        return df
+
+    # pKa
+    pka_path = os.path.join(pc_dir, "pka", "pka_summary.csv")
+    if os.path.exists(pka_path):
+        pka = _rename_vid(pd.read_csv(pka_path))
+        cols = [c for c in ["variant_id", "avg_shift_propka", "avg_shift_pkai", "overall_consensus"]
+                if c in pka.columns]
+        merged = merged.merge(pka[cols], on="variant_id", how="left")
+        print(f"[Phase C] pKa: {pka_path} ({len(pka)} 行)")
+
+    # Rosetta pH-score
+    ph_path = os.path.join(pc_dir, "rosetta", "ph_scores.csv")
+    if os.path.exists(ph_path):
+        ph = _rename_vid(pd.read_csv(ph_path))
+        merged = merged.merge(ph[["variant_id", "ph_score"]], on="variant_id", how="left")
+        print(f"[Phase C] pH-score: {ph_path} ({len(ph)} 行)")
+
+    # Rosetta dddG_elec
+    elec_path = os.path.join(pc_dir, "rosetta", "dddg_elec.csv")
+    if os.path.exists(elec_path):
+        elec = _rename_vid(pd.read_csv(elec_path))
+        merged = merged.merge(elec[["variant_id", "dddG_elec"]], on="variant_id", how="left")
+        print(f"[Phase C] dddG_elec: {elec_path} ({len(elec)} 行)")
+
+    # RMSD
+    rmsd_path = os.path.join(pc_dir, "rmsd", "rmsd_summary.csv")
+    if os.path.exists(rmsd_path):
+        rmsd = _rename_vid(pd.read_csv(rmsd_path))
+        primary = pc.get("structure_generation", {}).get("primary", "rosetta")
+        rmsd = rmsd[rmsd["source"] == primary]
+        rmsd_cols = ["variant_id", "global_rmsd"] + [
+            c for c in rmsd.columns if c.endswith("_rmsd") and c != "global_rmsd"
+        ]
+        merged = merged.merge(rmsd[rmsd_cols], on="variant_id", how="left")
+        print(f"[Phase C] RMSD: {rmsd_path} ({len(rmsd)} 行)")
+
     return merged
 
 def _score(df, sel):
@@ -187,6 +252,12 @@ def main(cfg_path):
     meta = _load_batch_meta(P)
     merged = _attach_meta(fx, meta, screen_dir)
 
+    # Phase C: 左连接 pKa / Rosetta / RMSD 结果
+    merged = _attach_phase_c(merged, cfg)
+    if cfg.get("phase_c", {}).get("enabled"):
+        merged.to_csv(os.path.join(res_dir, "merged_all.csv"), index=False)
+        print(f"[OK] merged_all.csv n={len(merged)}")
+
     sel = cfg["selection"]; mode = str(sel.get("mode","fixed")).lower()
     if mode == "adaptive":
         final = _adaptive_filter_rank(merged, sel)
@@ -200,6 +271,10 @@ def main(cfg_path):
         "dG_pH7_4","dG_pH6_0","delta",
         "WT_dG_pH7_4","WT_dG_pH6_0","delta_wt",
         "ddG_pH7_4","ddG_pH6_0","delta_delta",
+        # Phase C 列（存在时输出，缺失时忽略）
+        "ph_score","dddG_elec",
+        "avg_shift_propka","avg_shift_pkai","overall_consensus",
+        "global_rmsd",
         "score"
     ] if c in final.columns]
     final[cols].to_csv(out_csv, index=False)

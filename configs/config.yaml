@@ -70,3 +70,51 @@ selection:
   alpha: 0.3
   beta: 0.1
   delta_delta_weight: 0.0
+
+# ── Phase C: 多维度评估（可选）──────────────────────────────────────────────
+phase_c:
+  enabled: false                     # 设为 true 启用 Steps 8-11
+
+  paths:
+    wt_pdb: "experiments/1E62/data/ab_wt.pdb"
+    template_pdb: "experiments/1E62/data/AF3-abag-n1.pdb"
+    phase_c_dir: "phase_c"           # Phase C 所有输出的根目录
+
+  input:
+    csv: "results/final_top10k.csv"  # Phase C 候选列表（默认为 Step 7 后的合并结果）
+    mutations_column: "mutations"
+    mutations_format: "foldx"        # "foldx" (FA102H) 或 "unified" (HF102H)
+
+  chains:
+    binder: ["A", "B"]
+    target: ["C"]
+    heavy: "A"
+    light: "B"
+
+  structure_generation:
+    primary: "rosetta"               # "rosetta" 或 "simplefold"
+    auxiliary: null                   # 辅助方法（如 "simplefold"），null 则不启用
+    rosetta:
+      repack_shell: 8.0
+      minimize: true
+      scorefxn: "ref2015"
+    simplefold:
+      model: "simplefold_3B"
+      num_steps: 500
+      nsample_per_protein: 3
+      tau: 0.01
+
+  pka:
+    tools: ["propka", "pkai+"]
+    his_positions:
+      - { chain: "B", resid: 42 }
+      - { chain: "B", resid: 43 }
+      - { chain: "B", resid: 44 }
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 102 }
+    L1: { chain: "B", start: 24, end: 34 }
+    L2: { chain: "B", start: 50, end: 56 }
+    L3: { chain: "B", start: 89, end: 97 }
