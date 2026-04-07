@@ -1,0 +1,57 @@
+; Production MD — generated from template
+integrator              = md
+dt                      = {{ dt }}
+nsteps                  = {{ nsteps }}
+;
+nstxout                 = 0
+nstvout                 = 0
+nstfout                 = 0
+nstlog                  = 50000
+nstenergy               = 10000
+nstxout-compressed      = {{ save_nsteps }}
+compressed-x-grps       = System
+;
+cutoff-scheme           = Verlet
+nstlist                 = 20
+vdwtype                 = Cut-off
+vdw-modifier            = Force-switch
+rvdw_switch             = 1.0
+rvdw                    = 1.2
+rlist                   = 1.2
+rcoulomb                = 1.2
+coulombtype             = pme
+;
+tcoupl                  = Nose-Hoover
+tc_grps                 = Protein Non-Protein
+tau_t                   = 1.0 1.0
+ref_t                   = {{ temperature }} {{ temperature }}
+;
+pcoupl                  = Parrinello-Rahman
+pcoupltype              = isotropic
+tau_p                   = 5.0
+compressibility         = 4.5e-5
+ref_p                   = 1.0
+;
+constraints             = h-bonds
+constraint_algorithm    = LINCS
+continuation            = yes
+;
+nstcomm                 = 100
+comm_mode               = linear
+comm_grps               = System
+{% if cphmd_enabled %}
+;
+; --- Constant pH MD (λ-dynamics) ---
+lambda-dynamics          = yes
+lambda-dynamics-simulation-ph = {{ cphmd_ph }}
+lambda-dynamics-lambda-group-count = {{ cphmd_n_groups }}
+lambda-dynamics-update-nst = {{ cphmd_update_nst }}
+{% for group in cphmd_groups %}
+lambda-dynamics-group-type{{ loop.index }} = {{ group.type }}
+lambda-dynamics-atom-set{{ loop.index }}-name = {{ group.name }}
+lambda-dynamics-atom-set{{ loop.index }}-index-group-name = {{ group.index_group }}
+lambda-dynamics-atom-set{{ loop.index }}-barrier = {{ group.barrier }}
+lambda-dynamics-atom-set{{ loop.index }}-init-lambda = {{ group.init_lambda }}
+lambda-dynamics-charge-constraints = {{ group.charge_constraints | default('no') }}
+{% endfor %}
+{% endif %}
