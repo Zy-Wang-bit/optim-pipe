@@ -39,7 +39,7 @@ continuation            = yes
 nstcomm                 = 100
 comm_mode               = linear
 comm_grps               = System
-{% if cphmd_enabled %}
+{% if cphmd_enabled is defined and cphmd_enabled %}
 ;
 ; --- Constant pH MD (λ-dynamics) ---
 lambda-dynamics          = yes
