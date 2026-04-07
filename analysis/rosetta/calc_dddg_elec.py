@@ -125,6 +125,17 @@ class dddGElecCalculator:
                 append_subpose_to_pose(new_pose, sub, 1, sub.total_residue())
         return new_pose
 
+    def _get_neighbors(self, pose, center_idx, radius_A=8.0):
+        """获取 center_idx 周围 radius_A 内的所有残基索引（含自身）"""
+        center_res = pose.residue(center_idx)
+        center_xyz = center_res.nbr_atom_xyz()
+        neighbors = []
+        for i in range(1, pose.total_residue() + 1):
+            res_xyz = pose.residue(i).nbr_atom_xyz()
+            if center_xyz.distance(res_xyz) <= radius_A:
+                neighbors.append(i)
+        return neighbors
+
     def _repack_focused(self, pose, focus_residues=None):
         pose_copy = Pose()
         pose_copy.assign(pose)
@@ -256,16 +267,7 @@ class dddGElecCalculator:
         all_his = self._get_all_histidine_residues(self.pose)
         n_his_total = len(all_his)
 
-        # 1. 预处理 (repack)
-        pose_ph7 = self._repack_focused(self.pose, focus_residues=None)
-
-        # 2. pH 7 计算
-        ec7, eb7, et7 = self._calc_components(pose_ph7)
-        if ec7 is None:
-            return {"pdb_name": pdb_name, "status": "error", "error": "pH7 extraction failed"}
-        ddG_ph7 = ec7 - eb7 - et7
-
-        # 3. 模拟 pH 5（只对突变位点质子化）
+        # 提前校验突变位点（避免无用 repack）
         if mutation_idx is None:
             return {
                 "pdb_name": pdb_name,
@@ -274,10 +276,9 @@ class dddGElecCalculator:
                 "n_his_total": n_his_total
             }
 
-        # 验证突变位点是否为His
-        res_at_site = pose_ph7.residue(mutation_idx).name3()
+        res_at_site = self.pose.residue(mutation_idx).name3()
         is_his = res_at_site.startswith("HIS") or res_at_site in ("HIP", "HID", "HIE")
-        
+
         if not is_his:
             return {
                 "pdb_name": pdb_name,
@@ -286,6 +287,18 @@ class dddGElecCalculator:
                 "res_at_site": res_at_site,
                 "rosetta_idx": mutation_idx
             }
+
+        # 1. 预处理 (focused repack — 只 repack 突变位点周围 8Å)
+        repack_shell = self._get_neighbors(self.pose, mutation_idx, radius_A=8.0)
+        if self.verbose:
+            print(f"  > Repack shell: {len(repack_shell)} residues within 8Å of idx {mutation_idx}")
+        pose_ph7 = self._repack_focused(self.pose, focus_residues=repack_shell)
+
+        # 2. pH 7 计算
+        ec7, eb7, et7 = self._calc_components(pose_ph7)
+        if ec7 is None:
+            return {"pdb_name": pdb_name, "status": "error", "error": "pH7 extraction failed"}
+        ddG_ph7 = ec7 - eb7 - et7
         
         try:
             pose_ph5_raw, diag_info = self._simulate_ph5_his_charge(pose_ph7, target_residues=[mutation_idx])
@@ -303,9 +316,9 @@ class dddGElecCalculator:
                 res_after = d.get("after", "?")
                 replace_success = d.get("success", False)
 
-        # 4. pH 5 Repack
+        # 4. pH 5 Repack (same shell as pH7 for consistency)
         try:
-            pose_ph5 = self._repack_focused(pose_ph5_raw, focus_residues=[mutation_idx])
+            pose_ph5 = self._repack_focused(pose_ph5_raw, focus_residues=repack_shell)
         except Exception as e:
             return {"pdb_name": pdb_name, "status": "error", "error": f"Repack failed: {e}"}
 

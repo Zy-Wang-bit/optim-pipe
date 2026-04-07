@@ -124,24 +124,40 @@ class dddGElecCalculator:
         
         return new_pose
     
-    def _repack_pose(self, pose):
-        """对pose进行repack"""
+    def _get_neighbors(self, pose, center_indices, radius_A=8.0):
+        """获取 center_indices 周围 radius_A 内的所有残基索引（含自身）"""
+        neighbor_set = set()
+        for cidx in center_indices:
+            center_xyz = pose.residue(cidx).nbr_atom_xyz()
+            for i in range(1, pose.total_residue() + 1):
+                if pose.residue(i).nbr_atom_xyz().distance(center_xyz) <= radius_A:
+                    neighbor_set.add(i)
+        return sorted(neighbor_set)
+
+    def _repack_pose(self, pose, focus_residues=None):
+        """对pose进行repack。focus_residues 非 None 时只 repack 指定残基。"""
         pose_copy = Pose()
         pose_copy.assign(pose)
-        
+
         # 创建TaskFactory，只允许repack不允许design
         tf = TaskFactory()
         tf.push_back(RestrictToRepacking())
-        
+
         packer_task = tf.create_task_and_apply_taskoperations(pose_copy)
-        
+
+        if focus_residues is not None:
+            focus_set = set(focus_residues)
+            for i in range(1, pose_copy.total_residue() + 1):
+                if i not in focus_set:
+                    packer_task.nonconst_residue_task(i).prevent_repacking()
+
         # 使用标准ScoreFunction进行repack
         sf_full = pyrosetta.get_score_function()
-        
+
         packer = PackRotamersMover(sf_full)
         packer.task_factory(tf)
         packer.apply(pose_copy)
-        
+
         return pose_copy
     
     def _repack_his_only(self, pose, ph_value):
@@ -151,33 +167,15 @@ class dddGElecCalculator:
         """
         pose_copy = Pose()
         pose_copy.assign(pose)
-        
+
         # 获取His残基
         his_residues = self._get_histidine_residues(pose_copy)
-        
+
         if not his_residues:
             return pose_copy
-        
-        # 创建TaskFactory
-        from pyrosetta.rosetta.core.pack.task.operation import PreventRepacking
-        
-        tf = TaskFactory()
-        tf.push_back(RestrictToRepacking())
-        
-        packer_task = tf.create_task_and_apply_taskoperations(pose_copy)
-        
-        # 只允许His残基repack
-        for i in range(1, pose_copy.total_residue() + 1):
-            if i not in his_residues:
-                packer_task.nonconst_residue_task(i).prevent_repacking()
-        
-        # 使用标准ScoreFunction进行repack
-        sf_full = pyrosetta.get_score_function()
-        
-        packer = PackRotamersMover(sf_full)
-        packer.apply(pose_copy)
-        
-        return pose_copy
+
+        # 使用 _repack_pose 的 focus_residues 参数限制范围
+        return self._repack_pose(pose, focus_residues=his_residues)
     
     def _calc_elec_energy(self, pose):
         """计算fa_elec能量"""
@@ -247,14 +245,25 @@ class dddGElecCalculator:
         """
         if self.verbose:
             print(f"处理: {os.path.basename(self.pdb_path)}")
-        
-        # 先对整体结构进行repack
-        pose_repacked = self._repack_pose(self.pose)
-        
+
+        # 确定 repack 范围：His 残基及其 8Å 邻域
+        his_residues = self._get_histidine_residues(self.pose)
+        if his_residues:
+            repack_shell = self._get_neighbors(self.pose, his_residues, radius_A=8.0)
+        else:
+            repack_shell = None  # 无 His，跳过 repack
+
+        if self.verbose:
+            n_shell = len(repack_shell) if repack_shell else 0
+            print(f"  > Repack shell: {n_shell} residues around {len(his_residues)} His")
+
+        # 对 His 邻域进行 focused repack（替代全蛋白 repack）
+        pose_repacked = self._repack_pose(self.pose, focus_residues=repack_shell)
+
         # pH 7.4条件：使用默认His状态
         pose_ph7 = Pose()
         pose_ph7.assign(pose_repacked)
-        
+
         # 对His进行repack（pH 7.4条件）
         pose_ph7 = self._repack_his_only(pose_ph7, 7.4)
         
