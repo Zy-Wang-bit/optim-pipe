@@ -1,8 +1,8 @@
 # optim-pipe
 
 pH 依赖性抗体亲和力优化的自动化计算流水线。
-集成 ProteinMPNN（序列设计）→ ESM-1b（快速评分）→ FoldX（能量计算）→ 自适应筛选，
-并通过多轮湿实验闭环（R1→R2→R3…）持续优化抗体变体。
+采用 3 Tier 漏斗架构：Tier 1 高通量筛选（MPNN + ESM + FoldX）→ Tier 2 结构评估（PyRosetta + SimpleFold 3x）→ Tier 3 精排（dddG_elec），
+通过多轮湿实验闭环（R1→R2→R3…）持续优化抗体变体。
 
 当前聚焦于抗 HBsAg 抗体 **1E62** 的 pH 敏感性改造（酸性解离），覆盖基因型 Ae、B、D1。
 
@@ -27,10 +27,10 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 
 | 组件 | conda 环境名 | 用途 |
 |------|-------------|------|
-| **主 pipeline** | `optim-pipe` | 核心流程：接口扫描、ESM评分、FoldX调用、合并筛选 |
+| **主 pipeline** | `optim-pipe` | 核心流程：接口扫描、ESM评分、FoldX调用、筛选合并 |
 | ProteinMPNN | `proteinmpnn` | 序列设计（Step 2） |
-| SimpleFold | `simplefold` | 结构预测（R3 评估） |
-| PyRosetta | `pyrosetta` | Rosetta 分析（pH-score、dddG_elec） |
+| SimpleFold | `simplefold` | 结构预测 3x 采样（Tier 2 Step 10） |
+| PyRosetta | `pyrosetta` | 突变体建模 + dddG_elec + pH-score（Tier 2 Step 9a/9c） |
 
 **激活主环境：**
 ```bash
@@ -76,14 +76,14 @@ optim-pipe/
 │
 ├── README.md                # 项目总览
 ├── CLAUDE.md                # AI 工作协议 + 跨对话任务管理
-├── run_pipeline.sh          # 主入口：8 步 pipeline 一键运行
+├── run_pipeline.sh          # 主入口：3 Tier / 13 Step pipeline
 │
 ├── configs/                 # 配置文件
 │   ├── config.yaml          #   主配置（路径、设计参数、筛选条件）
 │   ├── config_*_n*.yaml     #   各 PDB 模板的专用配置
 │   └── mpnn/                #   MPNN 链 ID 和固定位点配置
 │
-├── scripts/                 # 核心 pipeline 脚本（12 个模块）
+├── scripts/                 # 核心 pipeline 脚本（16 个模块）
 │   ├── scan_interface.py    #   Step 1: 接口热点扫描
 │   ├── run_mpnn_design.py   #   Step 2: MPNN 序列设计
 │   ├── build_his_seeds.py   #   Step 2: His 种子库生成
@@ -93,7 +93,15 @@ optim-pipe/
 │   ├── precompute_wt_ac.py  #   Step 5: 预计算 WT 相互作用能
 │   ├── make_mutlist_chunk.py#   Step 6: 生成 FoldX 批次
 │   ├── run_foldx_batch.py   #   Step 7: FoldX 评估
-│   ├── merge_and_select.py  #   Step 8: 合并与自适应筛选
+│   ├── tier1_filter.py      #   Step 8: Tier 1 自适应门槛筛选
+│   ├── build_structures.py  #   Step 9a: PyRosetta 突变体建模
+│   ├── run_pka.py           #   Step 9b: pKa 预测
+│   ├── run_rosetta_eval.py  #   Step 9c: dddG_elec + pH-score
+│   ├── run_simplefold_3x.py #   Step 10: SimpleFold 3x 采样
+│   ├── run_rmsd.py          #   Step 11: CDR RMSD
+│   ├── tier2_filter.py      #   Step 12: Tier 2 pKa + RMSD 筛选
+│   ├── merge_and_rank.py    #   Step 13: Tier 3 精排
+│   ├── merge_and_select.py  #   旧模式合并筛选（向后兼容）
 │   ├── mpnn_filter_his.py   #   辅助：过滤 His 突变
 │   └── build_mutants_from_csv.py  # 辅助：从 CSV 构建突变体序列
 │
@@ -131,31 +139,34 @@ optim-pipe/
 
 ---
 
-## Pipeline 流程
+## Pipeline 流程（3 Tier / 13 Step）
 
 ```
-Step 1: scan_interface.py     → 接口热点扫描（His 偏向位点识别）
-Step 2: run_mpnn_design.py    → MPNN 序列设计 + His 种子库
-Step 3: run_esm_chunk.py      → ESM-1b 评分与候选合并
-Step 4: repair_pdbs.py        → FoldX RepairPDB
-Step 5: precompute_wt_ac.py   → 预计算 WT 相互作用能
-Step 6: make_mutlist_chunk.py → 生成 FoldX 突变批次
-Step 7: run_foldx_batch.py    → FoldX BuildModel + AnalyseComplex（双 pH）
-Step 8: merge_and_select.py   → 合并结果 + 自适应筛选 → final_top10k.csv
+Tier 1: 生成 + 高通量筛选                        ~10万 → ~500
+  Step 1:  scan_interface.py      接口热点扫描
+  Step 2:  run_mpnn_design.py     MPNN 序列设计 + His 种子库
+  Step 3:  run_esm_chunk.py       ESM-1b 评分
+  Step 4:  repair_pdbs.py         FoldX RepairPDB
+  Step 5:  precompute_wt_ac.py    预计算 WT 相互作用能
+  Step 6:  make_mutlist_chunk.py  生成 FoldX 突变批次
+  Step 7:  run_foldx_batch.py     FoldX BuildModel + AnalyseComplex（双 pH）
+  Step 8:  tier1_filter.py        dG + delta 自适应门槛 → tier1_candidates.csv
+
+Tier 2: 结构评估 + 筛选（tier2.enabled 控制）       ~500 → ~100
+  PyRosetta 线（复合物模板）：
+    Step 9a: build_structures.py  PyRosetta 突变体建模
+    Step 9b: run_pka.py           PROPKA3 + pKAI+ pKa 预测
+    Step 9c: run_rosetta_eval.py  dddG_elec + pH-score
+  SimpleFold 3x 线（单抗体序列）：
+    Step 10: run_simplefold_3x.py SimpleFold 3B × 3 采样
+    Step 11: run_rmsd.py          CDR RMSD（3x 中位数 + 异常值剔除）
+  Step 12: tier2_filter.py        pKa 相对排序 + CDR RMSD 门槛
+
+Tier 3: 精排                                     ~100 → top-N
+  Step 13: merge_and_rank.py      dddG_elec 排序 + 软标记 → final_candidates.csv
 ```
 
-### R3 评估流程（理性设计专用）
-
-R3 不经过 MPNN 重新设计，而是基于 R2 SAR 规则进行组合设计，采用独立评估流水线：
-
-```
-1. 结构生成    → PyRosetta 突变建模 + SimpleFold 集成预测
-2. pKa 预测    → PROPKA3 + pKAI+ 双工具共识
-3. 能量评估    → FoldX 双 pH（7.4 / 6.0）
-4. pH-score    → Rosetta His 氢键网络分析
-5. RMSD 计算   → CDR 区结构稳定性验证
-6. 综合排名    → 多指标加权打分 → r3_evaluation_report.csv
-```
+`tier1.enabled: false` 时回退到旧 8 步流程（merge_and_select.py）。
 
 ---
 
@@ -172,4 +183,7 @@ R3 不经过 MPNN 重新设计，而是基于 R2 SAR 规则进行组合设计，
 | **screening** | ESM 初筛参数（保留比例、序列长度约束） |
 | **foldx** | FoldX 计算参数（pH 点 [7.4, 6.0]、运行次数） |
 | **resources** | 并行计算资源（批量大小、最大进程数、checkpoint 间隔） |
-| **selection** | 自适应筛选（阈值、松弛策略、配额约束） |
+| **tier1** | Tier 1 自适应筛选（目标范围、阈值、ESM 异常标记） |
+| **tier2** | Tier 2 结构评估（PyRosetta/SimpleFold 配置、pKa/RMSD 筛选阈值） |
+| **tier3** | Tier 3 精排（排序指标、软标记） |
+| **selection** | 旧模式自适应筛选（向后兼容） |
