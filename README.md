@@ -131,7 +131,13 @@ optim-pipe/
 │   ├── ProteinMPNN/         #   序列设计
 │   ├── ml-simplefold/       #   结构预测（含 weights/ 模型权重）
 │   ├── foldx/               #   FoldX 二进制
-│   └── molecular_dynamics/  #   GROMACS 分子动力学脚本
+│   └── molecular_dynamics/  #   MD 分析模块（独立）
+│       ├── run_md.py            # GROMACS 全自动执行（PDB → 轨迹）
+│       ├── analyze_trajectory.py# 轨迹分析入口
+│       ├── compare_ph.py        # 双 pH 差异比较
+│       ├── configs/             # MD 模块配置
+│       ├── mdp_templates/       # Jinja2 参数模板
+│       └── lib/                 # 分析器（RMSD/RMSF/氢键/SASA/接触/MMPBSA）
 │
 ├── archive/                 # 归档（旧脚本与备份）
 └── workspace/               # FoldX 工作区（待确认）
@@ -187,3 +193,39 @@ Tier 3: 精排                                     ~100 → top-N
 | **tier2** | Tier 2 结构评估（PyRosetta/SimpleFold 配置、pKa/RMSD 筛选阈值） |
 | **tier3** | Tier 3 精排（排序指标、软标记） |
 | **selection** | 旧模式自适应筛选（向后兼容） |
+
+---
+
+## MD 分析模块
+
+独立于 3-Tier pipeline 的分子动力学模块，提供 GROMACS 自动化执行和轨迹分析能力。
+
+### 功能
+
+- **MD 执行自动化**：PDB → 轨迹全自动流程，解决了 pdb2gmx 手动选择力场/水模型的问题（使用 `-ff`/`-water` 名称指定）
+- **CpHMD 支持**：恒定 pH 分子动力学（λ-dynamics），His 质子化态在模拟中动态切换
+- **6 项分析**：RMSD（含收敛检测）、RMSF（残基柔性）、界面氢键占有率、Buried SASA、界面接触数、MM-GBSA（可选）
+- **双 pH 比较**：同一变体在 pH 7.4 vs 6.0 下的行为差异分析
+- **汇总报告**：所有变体分析结果汇总为 `md_report.csv`
+
+### 快速开始
+
+```bash
+module load gromacs/2024.2 openmpi/5.0.3
+cd third_party/molecular_dynamics
+
+# 运行 MD
+python run_md.py --pdb /path/to/complex.pdb --ph 7.4 6.0 \
+    --output-dir experiments/1E62/R3/md/
+
+# 分析轨迹
+python analyze_trajectory.py --traj experiments/1E62/R3/md/variant/pH_7.4/
+
+# pH 比较
+python compare_ph.py --variant-dir experiments/1E62/R3/md/variant/ \
+    --base-ph 7.4 --target-ph 6.0
+```
+
+### 配置
+
+MD 模块使用独立配置文件 `third_party/molecular_dynamics/configs/md_config.yaml`，包含 GROMACS 参数、模拟阶段设置、CpHMD 配置和分析参数。

@@ -20,7 +20,8 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 | `tier2/` | Tier 2 运行时输出（structures/、pka/、rosetta/、rmsd/） |
 | `phase_c/` | 旧模式 Phase C 运行时输出 |
 | `docs/` | 路线图、设计文档、分析报告 |
-| `third_party/` | 外部工具（FoldX、ProteinMPNN、SimpleFold、MD） |
+| `third_party/` | 外部工具（FoldX、ProteinMPNN、SimpleFold） |
+| `third_party/molecular_dynamics/` | 独立 MD 模块（GROMACS 自动化 + 轨迹分析） |
 | `archive/` | 历史归档 |
 | `.tasks/` | 跨对话任务管理 |
 
@@ -108,3 +109,32 @@ Tier 3: 精排（Step 13）
 - ProteinMPNN 和 SimpleFold 通过外部子进程调用，分别需要 `proteinmpnn` 和 `simplefold` conda 环境
 - Tier 2 Step 9a/9c 需要 `pyrosetta` 环境，Step 10 需要 `simplefold` 环境，其余在主环境 `optim-pipe` 中运行
 - Tier 配置在 `configs/config.yaml` 的 `tier1`/`tier2`/`tier3` 段；旧模式配置在 `phase_c` 段
+
+## MD 分析模块（独立）
+
+独立于 3-Tier pipeline 的分子动力学模块，位于 `third_party/molecular_dynamics/`。
+
+### 环境依赖
+- **GROMACS**: `module load gromacs/2024.2 openmpi/5.0.3`
+- **Python 包**: MDAnalysis（已安装在 optim-pipe 环境）、Jinja2
+- **可选**: gmx_MMPBSA（MM-PBSA/GBSA 计算）
+
+### 使用方法
+
+```bash
+module load gromacs/2024.2 openmpi/5.0.3
+cd third_party/molecular_dynamics
+
+# MD 执行（全自动，无需手动选择力场/水模型）
+python run_md.py --pdb input.pdb --ph 7.4 6.0 --output-dir experiments/1E62/R3/md/
+
+# 轨迹分析（RMSD、RMSF、氢键、SASA、接触数）
+python analyze_trajectory.py --traj experiments/1E62/R3/md/HE1H/pH_7.4/
+
+# 双 pH 比较
+python compare_ph.py --variant-dir experiments/1E62/R3/md/HE1H/ --base-ph 7.4 --target-ph 6.0
+```
+
+### 配置
+- MD 模块配置：`third_party/molecular_dynamics/configs/md_config.yaml`
+- 与 pipeline `configs/config.yaml` 独立，CDR 区域定义需手动同步
