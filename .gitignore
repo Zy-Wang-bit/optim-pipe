@@ -12,7 +12,8 @@ logs/
 workspace/
 
 # Third-party tools (external dependencies, install separately)
-third_party/
+third_party/*
+!third_party/molecular_dynamics/
 
 # Experiment data (large, keep locally)
 experiments/

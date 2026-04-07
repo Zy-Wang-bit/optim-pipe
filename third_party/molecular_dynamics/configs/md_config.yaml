@@ -1,0 +1,67 @@
+# third_party/molecular_dynamics/configs/md_config.yaml
+# MD 模块配置文件
+
+md:
+  # GROMACS 执行参数
+  gmx_executable: "gmx"           # gmx 可执行文件路径，可改为绝对路径
+  force_field: "amber99sb-ildn"    # 力场名称（传给 -ff 参数）
+  water_model: "tip3p"             # 水模型名称（传给 -water 参数）
+  box_type: "cubic"
+  box_distance: 1.0               # nm, 蛋白到盒子边缘的最小距离
+  ion_concentration: 0.15          # mol/L
+  temperature: 310                 # K (37°C)
+  max_warnings: 2
+
+  stages:
+    minimization:
+      max_steps: 5000
+      emtol: 1000.0                # kJ/mol/nm
+    nvt:
+      duration_ps: 200
+      dt_ps: 0.001
+    npt:
+      duration_ps: 1000
+      dt_ps: 0.001
+    production:
+      duration_ns: 50
+      dt_ps: 0.002
+      save_interval_ps: 100        # 轨迹保存间隔
+
+  cphmd:
+    enabled: false                  # CpHMD 默认关闭（需 GROMACS ≥2022）
+    ph_values: [7.4, 6.0]
+    titratable_residues: []         # 空 = 自动检测所有 His
+    lambda_dynamics:
+      calibration_ph: 7.0
+      barrier_height: 5.0           # kJ/mol
+      update_nst: 100               # λ 更新间隔 (steps)
+
+  gpu:
+    device_id: 0
+    ntmpi: 1
+    ntomp: 5
+
+  output_dir: "experiments/1E62/R3/md"
+
+analysis:
+  antibody_chains: ["A", "B"]
+  antigen_chains: ["C"]
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 102 }
+    L1: { chain: "B", start: 24, end: 34 }
+    L2: { chain: "B", start: 50, end: 56 }
+    L3: { chain: "B", start: 89, end: 97 }
+
+  convergence:
+    window_ns: 5.0
+    variance_threshold: 0.05       # Å²
+
+  contact_distance: 4.5             # Å
+
+  mmpbsa:
+    enabled: false
+    method: "GBSA"
+    frame_interval_ps: 100
