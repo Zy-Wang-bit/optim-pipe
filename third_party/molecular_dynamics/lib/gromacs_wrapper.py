@@ -254,12 +254,13 @@ class GromacsWrapper:
         cphmd_kwargs = {}
         if cphmd_enabled:
             cphmd_cfg = self.md["cphmd"]
+            groups = cphmd_cfg.get("_runtime_groups", [])
             cphmd_kwargs = {
                 "cphmd_enabled": True,
                 "cphmd_ph": ph,
-                "cphmd_n_groups": 0,  # 由 protonation.py 设置
+                "cphmd_n_groups": len(groups),
                 "cphmd_update_nst": cphmd_cfg["lambda_dynamics"]["update_nst"],
-                "cphmd_groups": [],   # 由 protonation.py 填充
+                "cphmd_groups": groups,
             }
 
         mdp = self._render_mdp(
