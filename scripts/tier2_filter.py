@@ -42,15 +42,20 @@ def _attach_pka(df, t2_dir):
 
 def _attach_rosetta(df, t2_dir):
     """左连接 Rosetta 结果 (dddG_elec + pH-score)。"""
-    for filename, label in [("dddg_elec.csv", "dddG_elec"), ("ph_scores.csv", "pH-score")]:
+    for filename, label, want in [
+        ("dddg_elec.csv", "dddG_elec", ["dddG_elec", "ddG_elec_pH7", "ddG_elec_pH5"]),
+        ("ph_scores.csv", "pH-score", ["ph_score"]),
+    ]:
         path = os.path.join(t2_dir, "rosetta", filename)
         if not os.path.exists(path):
             continue
         sub = pd.read_csv(path)
         if "variant_name" in sub.columns and "variant_id" not in sub.columns:
             sub = sub.rename(columns={"variant_name": "variant_id"})
-        cols = [c for c in sub.columns if c == "variant_id" or c in
-                ["dddG_elec", "ph_score", "ddG_elec_pH7", "ddG_elec_pH5"]]
+        if "variant_id" not in sub.columns:
+            print(f"[Tier 2] {label}: 缺少 variant_id 列，跳过")
+            continue
+        cols = ["variant_id"] + [c for c in want if c in sub.columns]
         df = df.merge(sub[cols], on="variant_id", how="left")
         print(f"[Tier 2] {label}: {path} ({len(sub)} 行)")
     return df

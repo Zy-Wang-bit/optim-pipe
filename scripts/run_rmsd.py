@@ -119,8 +119,8 @@ def evaluate_simplefold_3x(wt_pdb, struct_dir, cdr_regions, outlier_threshold=2.
     variant_pdbs = defaultdict(list)
     for p in all_pdbs:
         stem = Path(p).stem
-        # SimpleFold 输出格式: {variant_id}_sample_{N} 或 {variant_id}_{N}
-        match = re.match(r"(.+?)(?:_sample)?_(\d+)$", stem)
+        # SimpleFold 输出格式: {variant_id}_sampled_{N} 或 {variant_id}_sample_{N} 或 {variant_id}_{N}
+        match = re.match(r"(.+?)(?:_sampled|_sample)?_(\d+)$", stem)
         if match:
             vid = match.group(1)
             variant_pdbs[vid].append(p)
