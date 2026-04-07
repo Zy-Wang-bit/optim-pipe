@@ -1,7 +1,7 @@
 paths:
   # foldx_bin: "foldx"
   foldx_bin: "third_party/foldx/foldx"
-  pdb_dir: "experiments/1E62/data"
+  pdb_dir: "experiments/1E62/data/pdb"
   wt_dir: "experiments/1E62/data"
   wt_files:
     A: "heavy.fasta"     # 重链 WT
@@ -76,8 +76,8 @@ phase_c:
   enabled: false                     # 设为 true 启用 Steps 8-11
 
   paths:
-    wt_pdb: "experiments/1E62/data/ab_wt.pdb"
-    template_pdb: "experiments/1E62/data/AF3-abag-n1.pdb"
+    wt_pdb: "experiments/1E62/data/pdb/ab_wt.pdb"
+    template_pdb: "experiments/1E62/data/pdb/AF3-1E62-AeS-1.pdb"
     phase_c_dir: "phase_c"           # Phase C 所有输出的根目录
 
   input:
