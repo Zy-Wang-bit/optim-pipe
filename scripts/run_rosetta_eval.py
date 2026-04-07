@@ -58,7 +58,7 @@ def run_ph_score(pdb_paths, binder_chains, target_chains, out_path):
             }
         results.append(row)
 
-    df = pd.DataFrame(results).fillna(0)
+    df = pd.DataFrame(results)
     df.to_csv(out_path, index=False)
     return df
 
@@ -68,9 +68,8 @@ def run_dddg_elec(pdb_paths, binder_chains, target_chains, out_path):
     from analysis.rosetta.batch_calc_dddg_elec import dddGElecCalculator
 
     import pyrosetta
-    if not hasattr(pyrosetta, '_initialized'):
+    if not pyrosetta.rosetta.basic.was_init_called():
         pyrosetta.init("-mute all")
-        pyrosetta._initialized = True
 
     results = []
     for i, pdb_path in enumerate(pdb_paths, 1):

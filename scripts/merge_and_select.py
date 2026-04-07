@@ -96,30 +96,23 @@ def _attach_phase_c(merged, cfg):
             df = df.rename(columns={"variant_name": "variant_id"})
         return df
 
-    # pKa
-    pka_path = os.path.join(pc_dir, "pka", "pka_summary.csv")
-    if os.path.exists(pka_path):
-        pka = _rename_vid(pd.read_csv(pka_path))
-        cols = [c for c in ["variant_id", "avg_shift_propka", "avg_shift_pkai", "overall_consensus"]
-                if c in pka.columns]
-        merged = merged.merge(pka[cols], on="variant_id", how="left")
-        print(f"[Phase C] pKa: {pka_path} ({len(pka)} 行)")
+    # 统一的 Phase C 数据源定义: (子目录, 文件名, 需要的列, 标签)
+    joins = [
+        ("pka",     "pka_summary.csv",   ["variant_id", "avg_shift_propka", "avg_shift_pkai", "overall_consensus"], "pKa"),
+        ("rosetta", "ph_scores.csv",     ["variant_id", "ph_score"],        "pH-score"),
+        ("rosetta", "dddg_elec.csv",     ["variant_id", "dddG_elec"],       "dddG_elec"),
+    ]
 
-    # Rosetta pH-score
-    ph_path = os.path.join(pc_dir, "rosetta", "ph_scores.csv")
-    if os.path.exists(ph_path):
-        ph = _rename_vid(pd.read_csv(ph_path))
-        merged = merged.merge(ph[["variant_id", "ph_score"]], on="variant_id", how="left")
-        print(f"[Phase C] pH-score: {ph_path} ({len(ph)} 行)")
+    for subdir, filename, want_cols, label in joins:
+        csv_path = os.path.join(pc_dir, subdir, filename)
+        if not os.path.exists(csv_path):
+            continue
+        df = _rename_vid(pd.read_csv(csv_path))
+        cols = [c for c in want_cols if c in df.columns]
+        merged = merged.merge(df[cols], on="variant_id", how="left")
+        print(f"[Phase C] {label}: {csv_path} ({len(df)} 行)")
 
-    # Rosetta dddG_elec
-    elec_path = os.path.join(pc_dir, "rosetta", "dddg_elec.csv")
-    if os.path.exists(elec_path):
-        elec = _rename_vid(pd.read_csv(elec_path))
-        merged = merged.merge(elec[["variant_id", "dddG_elec"]], on="variant_id", how="left")
-        print(f"[Phase C] dddG_elec: {elec_path} ({len(elec)} 行)")
-
-    # RMSD
+    # RMSD 需要额外的 primary 过滤和动态列选择
     rmsd_path = os.path.join(pc_dir, "rmsd", "rmsd_summary.csv")
     if os.path.exists(rmsd_path):
         rmsd = _rename_vid(pd.read_csv(rmsd_path))
@@ -214,12 +207,15 @@ def _adaptive_filter_rank(df, sel):
     ddd_s= float(ddd_step) if ddd_step is not None else None
     ddd_f= float(ddd_floor) if ddd_floor is not None else None
 
+    # 预计算评分（不依赖过滤阈值），避免每次循环重复计算
+    scored = _score(df.copy(), sel)
+
     best = pd.DataFrame()
     while True:
-        q = (df["dG_pH7_4"] < dG) & (df["delta"] >= dm)
-        if ddd is not None and "delta_delta" in df.columns:
-            q = q & (df["delta_delta"] >= ddd)
-        pool = _score(df[q].copy(), sel)
+        q = (scored["dG_pH7_4"] < dG) & (scored["delta"] >= dm)
+        if ddd is not None and "delta_delta" in scored.columns:
+            q = q & (scored["delta_delta"] >= ddd)
+        pool = scored[q]
         picked = _adaptive_pick(pool, sel)
         if len(picked) >= int(sel.get("target_n", sel.get("top_n", 10000))):
             best = picked; break
@@ -240,7 +236,8 @@ def _adaptive_filter_rank(df, sel):
     return best
 
 def main(cfg_path):
-    cfg = yaml.safe_load(open(cfg_path))
+    with open(cfg_path) as f:
+        cfg = yaml.safe_load(f)
     P = _paths(cfg)
     res_dir = P["results_dir"]; screen_dir = os.path.join(res_dir, "screening")
     os.makedirs(screen_dir, exist_ok=True)
@@ -287,7 +284,8 @@ def main(cfg_path):
         "selection": sel
     }
     os.makedirs(os.path.join(res_dir,"audit"), exist_ok=True)
-    json.dump(audit, open(os.path.join(res_dir,"audit","manifest.json"),"w"), indent=2)
+    with open(os.path.join(res_dir,"audit","manifest.json"), "w") as f:
+        json.dump(audit, f, indent=2)
 
 if __name__=="__main__":
     cfg = sys.argv[1] if len(sys.argv)>1 else "configs/config.yaml"

@@ -12,13 +12,16 @@ Step 8 (Phase C): 突变体结构生成
 import argparse
 import csv
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
 import yaml
+
+# 复用 analysis/naming/convert.py 的突变解析
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from analysis.naming.convert import foldx_to_unified, parse_unified, hl_to_pdb_chain
 
 # ── 氨基酸映射 ─────────────────────────────────────────────────────────────
 
@@ -47,11 +50,10 @@ def parse_foldx_mutations(mut_str):
         token = token.strip()
         if not token:
             continue
-        m = re.match(r"^([A-Z])([A-Z])(\d+)([A-Z])$", token)
-        if not m:
-            raise ValueError(f"无法解析 FoldX 突变: {token}")
-        orig, chain, pos, new = m.group(1), m.group(2), int(m.group(3)), m.group(4)
-        mutations.append((chain, pos, orig, new))
+        unified = foldx_to_unified(token)
+        hl, orig, pos, new = parse_unified(unified)
+        pdb_chain = hl_to_pdb_chain(hl)
+        mutations.append((pdb_chain, pos, orig, new))
     return mutations
 
 
@@ -69,10 +71,7 @@ def parse_unified_mutations(mut_str, chain_map):
         token = token.strip()
         if not token or token.startswith("none"):
             continue
-        m = re.match(r"^([HL])([A-Z])(\d+)([A-Z])$", token)
-        if not m:
-            raise ValueError(f"无法解析统一格式突变: {token}")
-        hl, orig, pos, new = m.group(1), m.group(2), int(m.group(3)), m.group(4)
+        hl, orig, pos, new = parse_unified(token)
         pdb_chain = chain_map[hl]
         mutations.append((pdb_chain, pos, orig, new))
     return mutations

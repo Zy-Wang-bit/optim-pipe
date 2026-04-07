@@ -18,67 +18,50 @@ import pandas as pd
 import yaml
 from Bio.PDB import PDBParser, Superimposer
 
-
-def extract_ca_atoms(structure):
-    """提取所有链的 Ca 原子，返回 {(chain_id, resseq): atom}"""
-    ca_dict = {}
-    for model in structure:
-        for chain in model:
-            for residue in chain:
-                if residue.id[0] != " ":
-                    continue
-                if "CA" in residue:
-                    key = (chain.id, residue.id[1])
-                    ca_dict[key] = residue["CA"]
-        break
-    return ca_dict
+# 复用 analysis/ 中的 Ca 提取函数（返回 (chain, resseq, icode) 三元组 key）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from analysis.structure_compare.rmsd_ca_global import extract_ca_atoms
 
 
-def calc_rmsd_subset(wt_ca, mut_ca, residue_keys):
-    """计算指定残基子集的 RMSD（先全局对齐再计算子集 RMSD）。"""
+def _align_and_compute_rmsds(wt_ca, mut_ca, cdr_keys):
+    """一次全局叠合，同时计算全局 RMSD 和各 CDR 子集 RMSD。"""
     common_keys = sorted(set(wt_ca.keys()) & set(mut_ca.keys()))
     if len(common_keys) < 3:
-        return float("nan")
+        result = {"global_rmsd": float("nan")}
+        for cdr_name in cdr_keys:
+            result[f"{cdr_name.lower()}_rmsd"] = float("nan")
+        return result
 
+    # 一次全局叠合
     sup = Superimposer()
     wt_atoms = [wt_ca[k] for k in common_keys]
     mut_atoms = [mut_ca[k] for k in common_keys]
     sup.set_atoms(wt_atoms, mut_atoms)
 
+    result = {"global_rmsd": sup.rms}
+
+    # 应用变换到所有突变体原子（一次性）
     sup.apply([mut_ca[k] for k in mut_ca])
 
-    subset_keys = [k for k in residue_keys if k in wt_ca and k in mut_ca]
-    if not subset_keys:
-        return float("nan")
+    # 从已对齐坐标计算各 CDR 子集 RMSD
+    common_set = set(common_keys)
+    for cdr_name, keys in cdr_keys.items():
+        subset_keys = [k for k in keys if k in common_set]
+        if not subset_keys:
+            result[f"{cdr_name.lower()}_rmsd"] = float("nan")
+            continue
+        diffs = np.array([wt_ca[k].coord - mut_ca[k].coord for k in subset_keys])
+        result[f"{cdr_name.lower()}_rmsd"] = np.sqrt(np.mean(np.sum(diffs ** 2, axis=1)))
 
-    diffs = []
-    for k in subset_keys:
-        diff = wt_ca[k].coord - mut_ca[k].coord
-        diffs.append(np.sum(diff ** 2))
-
-    return np.sqrt(np.mean(diffs))
-
-
-def calc_global_rmsd(wt_ca, mut_ca):
-    """计算全局 Ca RMSD。"""
-    common_keys = sorted(set(wt_ca.keys()) & set(mut_ca.keys()))
-    if len(common_keys) < 3:
-        return float("nan")
-
-    sup = Superimposer()
-    sup.set_atoms(
-        [wt_ca[k] for k in common_keys],
-        [mut_ca[k] for k in common_keys],
-    )
-    return sup.rms
+    return result
 
 
 def get_cdr_keys(cdr_regions):
-    """从 config 的 CDR 定义生成残基 key 列表。"""
+    """从 config 的 CDR 定义生成残基 key 列表（三元组格式含 icode）。"""
     cdr_keys = {}
     for cdr_name, spec in cdr_regions.items():
         chain = spec["chain"]
-        keys = [(chain, r) for r in range(spec["start"], spec["end"] + 1)]
+        keys = [(chain, r, " ") for r in range(spec["start"], spec["end"] + 1)]
         cdr_keys[cdr_name] = keys
     return cdr_keys
 
@@ -99,14 +82,9 @@ def evaluate_structure_set(wt_pdb, pdb_paths, cdr_regions, source_label):
             mut_struct = parser.get_structure("mut", pdb_path)
             mut_ca = extract_ca_atoms(mut_struct)
 
-            row = {
-                "variant_id": name,
-                "source": source_label,
-                "global_rmsd": calc_global_rmsd(wt_ca, mut_ca),
-            }
-
-            for cdr_name, keys in cdr_keys.items():
-                row[f"{cdr_name.lower()}_rmsd"] = calc_rmsd_subset(wt_ca, mut_ca, keys)
+            rmsds = _align_and_compute_rmsds(wt_ca, mut_ca, cdr_keys)
+            row = {"variant_id": name, "source": source_label}
+            row.update(rmsds)
 
             print(f"global={row['global_rmsd']:.3f}")
         except Exception as e:
