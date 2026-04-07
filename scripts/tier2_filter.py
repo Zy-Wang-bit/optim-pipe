@@ -12,6 +12,13 @@ import numpy as np
 from pathlib import Path
 
 
+def _normalize_vid(df):
+    """统一 variant_name → variant_id 列名。"""
+    if "variant_name" in df.columns and "variant_id" not in df.columns:
+        df = df.rename(columns={"variant_name": "variant_id"})
+    return df
+
+
 def _load_tier1(cfg):
     """加载 Tier 1 候选列表。"""
     t1_out = cfg["tier1"].get("output", "results/tier1_candidates.csv")
@@ -30,8 +37,7 @@ def _attach_pka(df, t2_dir):
         print(f"[Tier 2] pKa 文件不存在: {pka_path}")
         return df
     pka = pd.read_csv(pka_path)
-    if "variant_name" in pka.columns and "variant_id" not in pka.columns:
-        pka = pka.rename(columns={"variant_name": "variant_id"})
+    pka = _normalize_vid(pka)
     pka_cols = [c for c in ["variant_id", "avg_shift_propka", "avg_shift_pkai",
                             "overall_consensus", "pKa_propka", "pKa_pkai"] if c in pka.columns]
     if "variant_id" in pka_cols:
@@ -50,8 +56,7 @@ def _attach_rosetta(df, t2_dir):
         if not os.path.exists(path):
             continue
         sub = pd.read_csv(path)
-        if "variant_name" in sub.columns and "variant_id" not in sub.columns:
-            sub = sub.rename(columns={"variant_name": "variant_id"})
+        sub = _normalize_vid(sub)
         if "variant_id" not in sub.columns:
             print(f"[Tier 2] {label}: 缺少 variant_id 列，跳过")
             continue
@@ -68,8 +73,7 @@ def _attach_rmsd(df, t2_dir):
         print(f"[Tier 2] RMSD 文件不存在: {rmsd_path}")
         return df
     rmsd = pd.read_csv(rmsd_path)
-    if "variant_name" in rmsd.columns and "variant_id" not in rmsd.columns:
-        rmsd = rmsd.rename(columns={"variant_name": "variant_id"})
+    rmsd = _normalize_vid(rmsd)
     # 优先 simplefold_3x 来源
     if "source" in rmsd.columns:
         sf3x = rmsd[rmsd["source"] == "simplefold_3x"]

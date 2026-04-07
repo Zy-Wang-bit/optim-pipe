@@ -115,6 +115,12 @@ def evaluate_simplefold_3x(wt_pdb, struct_dir, cdr_regions, outlier_threshold=2.
     if not all_pdbs:
         return []
 
+    # 解析 WT 一次，避免每个样本重复解析
+    parser = PDBParser(QUIET=True)
+    wt_struct = parser.get_structure("wt", wt_pdb)
+    wt_ca = extract_ca_atoms(wt_struct)
+    cdr_keys = get_cdr_keys(cdr_regions)
+
     # 按变体 ID 分组
     variant_pdbs = defaultdict(list)
     for p in all_pdbs:
@@ -134,9 +140,12 @@ def evaluate_simplefold_3x(wt_pdb, struct_dir, cdr_regions, outlier_threshold=2.
         sample_results = []
         for pdb_path in pdbs:
             try:
-                r = evaluate_structure_set(wt_pdb, [pdb_path], cdr_regions, "simplefold_3x")
-                if r:
-                    sample_results.append(r[0])
+                mut_struct = parser.get_structure("mut", pdb_path)
+                mut_ca = extract_ca_atoms(mut_struct)
+                rmsds = _align_and_compute_rmsds(wt_ca, mut_ca, cdr_keys)
+                r = {"variant_id": Path(pdb_path).stem, "source": "simplefold_3x"}
+                r.update(rmsds)
+                sample_results.append(r)
             except Exception as e:
                 print(f"  {vid} 样本 {pdb_path} 失败: {e}")
 

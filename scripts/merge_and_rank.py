@@ -48,7 +48,8 @@ def main(cfg_path):
 
     input_csv = t2_filter.get("output", "results/tier2_candidates.csv")
     df = pd.read_csv(input_csv)
-    print(f"[Tier 3] 输入: {input_csv} ({len(df)} 候选)")
+    n_input = len(df)
+    print(f"[Tier 3] 输入: {input_csv} ({n_input} 候选)")
 
     # 排序
     rank_col = t3_cfg.get("rank_by", "dddG_elec")
@@ -84,7 +85,7 @@ def main(cfg_path):
 
     # 审计日志
     audit = {
-        "tier3_input": len(pd.read_csv(input_csv)),
+        "tier3_input": n_input,
         "tier3_output": len(df),
         "rank_by": rank_col,
         "flags": {
@@ -99,8 +100,8 @@ def main(cfg_path):
         json.dump(audit, f, indent=2)
 
     print(f"[Tier 3] 输出: {out_path} (N={len(df)})")
-    n_flagged = sum(1 for _, r in df.iterrows()
-                    if r.get("esm_flag") or r.get("phscore_flag") or r.get("consensus_flag"))
+    flag_cols = [c for c in ["esm_flag", "phscore_flag", "consensus_flag"] if c in df.columns]
+    n_flagged = int(df[flag_cols].any(axis=1).sum()) if flag_cols else 0
     print(f"[Tier 3] 软标记: {n_flagged} 候选至少有 1 个 flag")
 
 
