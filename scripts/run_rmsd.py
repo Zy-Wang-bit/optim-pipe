@@ -102,8 +102,69 @@ def evaluate_structure_set(wt_pdb, pdb_paths, cdr_regions, source_label):
     return results
 
 
+def evaluate_simplefold_3x(wt_pdb, struct_dir, cdr_regions, outlier_threshold=2.0):
+    """评估 SimpleFold 3x 采样的 CDR RMSD。
+
+    每个变体有多个样本，剔除 global RMSD > outlier_threshold 的异常样本，
+    取各 CDR RMSD 的中位数。
+    """
+    import re
+    from collections import defaultdict
+
+    all_pdbs = sorted(glob.glob(os.path.join(struct_dir, "*.pdb")))
+    if not all_pdbs:
+        return []
+
+    # 按变体 ID 分组
+    variant_pdbs = defaultdict(list)
+    for p in all_pdbs:
+        stem = Path(p).stem
+        # SimpleFold 输出格式: {variant_id}_sample_{N} 或 {variant_id}_{N}
+        match = re.match(r"(.+?)(?:_sample)?_(\d+)$", stem)
+        if match:
+            vid = match.group(1)
+            variant_pdbs[vid].append(p)
+        else:
+            variant_pdbs[stem].append(p)
+
+    print(f"[RMSD 3x] {len(variant_pdbs)} 个变体，共 {len(all_pdbs)} 个 PDB")
+
+    results = []
+    for vid, pdbs in variant_pdbs.items():
+        sample_results = []
+        for pdb_path in pdbs:
+            try:
+                r = evaluate_structure_set(wt_pdb, [pdb_path], cdr_regions, "simplefold_3x")
+                if r:
+                    sample_results.append(r[0])
+            except Exception as e:
+                print(f"  {vid} 样本 {pdb_path} 失败: {e}")
+
+        if not sample_results:
+            continue
+
+        # 剔除 global RMSD 异常值
+        valid = [r for r in sample_results
+                 if r.get("global_rmsd") is not None and r["global_rmsd"] <= outlier_threshold]
+        if not valid:
+            print(f"  {vid}: 所有 {len(sample_results)} 样本均为异常值 (global RMSD > {outlier_threshold}Å)")
+            continue
+
+        # 取中位数
+        median_result = {"variant_id": vid, "source": "simplefold_3x",
+                         "n_valid_samples": len(valid)}
+        rmsd_keys = [k for k in valid[0] if k.endswith("_rmsd")]
+        for k in rmsd_keys:
+            vals = [r[k] for r in valid if r.get(k) is not None]
+            median_result[k] = float(np.median(vals)) if vals else None
+
+        results.append(median_result)
+
+    return results
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Phase C Step 11: CDR RMSD 评估")
+    parser = argparse.ArgumentParser(description="Step 11: CDR RMSD 评估")
     parser.add_argument("config", nargs="?", default="configs/config.yaml",
                         help="配置文件路径 (默认: configs/config.yaml)")
     args = parser.parse_args()
@@ -111,35 +172,53 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg["phase_c"]
-    wt_pdb = pc["paths"]["template_pdb"]
-    pc_dir = pc["paths"]["phase_c_dir"]
+    pc = cfg.get("tier2", cfg.get("phase_c", {}))
+    wt_pdb = pc["paths"].get("wt_ab_pdb", pc["paths"].get("template_pdb"))
+    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
     out_dir = os.path.join(pc_dir, "rmsd")
     os.makedirs(out_dir, exist_ok=True)
 
     cdr_regions = pc["cdr_regions"]
 
-    print("== Phase C: CDR RMSD 评估 ==")
+    print("== CDR RMSD 评估 ==")
     print(f"WT 参考: {wt_pdb}")
     print(f"CDR 区域: {list(cdr_regions.keys())}\n")
 
     all_results = []
 
-    # 评估 primary 方法的结构
-    methods = [pc["structure_generation"]["primary"]]
-    if pc["structure_generation"].get("auxiliary"):
-        methods.append(pc["structure_generation"]["auxiliary"])
+    # PyRosetta 线结构
+    rosetta_dir = os.path.join(pc_dir, "structures", "rosetta")
+    rosetta_pdbs = sorted(glob.glob(os.path.join(rosetta_dir, "*.pdb")))
+    if rosetta_pdbs:
+        print(f"[rosetta] {len(rosetta_pdbs)} 个结构")
+        all_results.extend(
+            evaluate_structure_set(wt_pdb, rosetta_pdbs, cdr_regions, "rosetta")
+        )
 
-    for method in methods:
-        struct_dir = os.path.join(pc_dir, "structures", method)
-        pdbs = sorted(glob.glob(os.path.join(struct_dir, "*.pdb")))
-        if pdbs:
-            print(f"[{method}] {len(pdbs)} 个结构")
-            all_results.extend(
-                evaluate_structure_set(wt_pdb, pdbs, cdr_regions, method)
-            )
-        else:
-            print(f"[{method}] 无结构文件")
+    # SimpleFold 3x 线结构
+    sf_dir = os.path.join(pc_dir, "structures", "simplefold")
+    if os.path.isdir(sf_dir) and glob.glob(os.path.join(sf_dir, "*.pdb")):
+        outlier_th = pc.get("simplefold", {}).get("outlier_global_rmsd", 2.0)
+        sf3x_results = evaluate_simplefold_3x(wt_pdb, sf_dir, cdr_regions, outlier_th)
+        all_results.extend(sf3x_results)
+        print(f"[SimpleFold 3x] {len(sf3x_results)} 变体 (中位数)")
+
+    # 旧模式兼容: structure_generation.primary/auxiliary
+    sg = pc.get("structure_generation", {})
+    if sg and not rosetta_pdbs and not os.path.isdir(sf_dir):
+        methods = [sg.get("primary")]
+        if sg.get("auxiliary"):
+            methods.append(sg["auxiliary"])
+        for method in methods:
+            if not method:
+                continue
+            struct_dir = os.path.join(pc_dir, "structures", method)
+            pdbs = sorted(glob.glob(os.path.join(struct_dir, "*.pdb")))
+            if pdbs:
+                print(f"[{method}] {len(pdbs)} 个结构")
+                all_results.extend(
+                    evaluate_structure_set(wt_pdb, pdbs, cdr_regions, method)
+                )
 
     if not all_results:
         print("错误: 没有结构文件可评估")

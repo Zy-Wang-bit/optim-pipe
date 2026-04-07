@@ -83,14 +83,20 @@ def load_candidates(cfg):
 
     Returns: [{"variant_id": str, "mutations": [(chain, pos, wt, mut), ...]}]
     """
-    pc = cfg["phase_c"]
+    pc = cfg.get("tier2", cfg.get("phase_c", {}))
     csv_path = pc["input"]["csv"]
     mut_col = pc["input"]["mutations_column"]
     fmt = pc["input"]["mutations_format"]
 
+    max_n = pc.get("max_candidates", pc.get("filter", {}).get("pka_top_n"))
+
     df = pd.read_csv(csv_path)
     if mut_col not in df.columns:
         raise ValueError(f"候选 CSV 缺少 '{mut_col}' 列: {csv_path}")
+
+    if max_n and len(df) > max_n:
+        print(f"[Phase C] 候选 {len(df)} 行，取 top {max_n}（按 score 排序）")
+        df = df.head(int(max_n))
 
     # 统一格式需要 H/L → PDB chain 映射
     chain_map = None
@@ -291,9 +297,18 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg["phase_c"]
-    method = args.method or pc["structure_generation"]["primary"]
-    pc_dir = pc["paths"]["phase_c_dir"]
+    pc = cfg.get("tier2", cfg.get("phase_c", {}))
+    # 方法判断: tier2 模式下默认 rosetta; 旧模式从 structure_generation.primary 读取
+    if args.method:
+        method = args.method
+    elif "rosetta" in pc:
+        method = "rosetta"
+    elif "structure_generation" in pc:
+        method = pc["structure_generation"]["primary"]
+    else:
+        method = "rosetta"
+
+    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
     template_pdb = pc["paths"]["template_pdb"]
 
     candidates = load_candidates(cfg)
@@ -304,16 +319,18 @@ def main():
         return
 
     if method == "rosetta":
-        ros_cfg = pc["structure_generation"]["rosetta"]
+        # tier2 模式: rosetta 配置直接在 pc["rosetta"] 下
+        # 旧模式: 在 pc["structure_generation"]["rosetta"] 下
+        ros_cfg = pc.get("rosetta", pc.get("structure_generation", {}).get("rosetta", {}))
         out_dir = os.path.join(pc_dir, "structures", "rosetta")
         build_with_rosetta(
             candidates, template_pdb, out_dir,
-            repack_shell=ros_cfg["repack_shell"],
-            minimize=ros_cfg["minimize"],
-            scorefxn=ros_cfg["scorefxn"],
+            repack_shell=ros_cfg.get("repack_shell", 8.0),
+            minimize=ros_cfg.get("minimize", True),
+            scorefxn=ros_cfg.get("scorefxn", "ref2015"),
         )
     elif method == "simplefold":
-        sf_cfg = pc["structure_generation"]["simplefold"]
+        sf_cfg = pc.get("simplefold", pc.get("structure_generation", {}).get("simplefold", {}))
         out_dir = os.path.join(pc_dir, "structures", "simplefold")
         build_with_simplefold(candidates, template_pdb, out_dir, sf_cfg)
 

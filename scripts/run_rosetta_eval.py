@@ -121,10 +121,15 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg["phase_c"]
-    pc_dir = pc["paths"]["phase_c_dir"]
+    pc = cfg.get("tier2", cfg.get("phase_c", {}))
+    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
 
-    primary = pc["structure_generation"]["primary"]
+    if "rosetta" in pc:
+        primary = "rosetta"
+    elif "structure_generation" in pc:
+        primary = pc["structure_generation"]["primary"]
+    else:
+        primary = "rosetta"
     struct_dir = os.path.join(pc_dir, "structures", primary)
     out_dir = os.path.join(pc_dir, "rosetta")
     os.makedirs(out_dir, exist_ok=True)

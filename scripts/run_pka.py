@@ -28,15 +28,20 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg["phase_c"]
-    pc_dir = pc["paths"]["phase_c_dir"]
+    pc = cfg.get("tier2", cfg.get("phase_c", {}))
+    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
     wt_pdb = pc["paths"]["wt_pdb"]
     chains = pc["chains"]
 
     from analysis.pka.run_pka import batch_predict
 
-    # 结构目录: primary 方法的输出
-    primary = pc["structure_generation"]["primary"]
+    # 结构目录: tier2 模式用 rosetta/; 旧模式从 structure_generation.primary 读取
+    if "rosetta" in pc:
+        primary = "rosetta"
+    elif "structure_generation" in pc:
+        primary = pc["structure_generation"]["primary"]
+    else:
+        primary = "rosetta"
     struct_dir = os.path.join(pc_dir, "structures", primary)
 
     out_dir = os.path.join(pc_dir, "pka")
