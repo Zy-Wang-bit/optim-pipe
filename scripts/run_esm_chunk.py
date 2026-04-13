@@ -119,22 +119,26 @@ def main(cfg_path):
             print(f"[WARN] {path} 缺少 sequence 列，已跳过")
             continue
 
-        # -------- 新增：若 sequence 是 "A/B/C" 多链格式，只保留指定链（默认 A） --------
-        target_chain = str(cfg["design"]["chain"]).strip().upper()  # 'A' / 'B' / 'C'
-        idx_map = {"A": 0, "B": 1, "C": 2}
-        chain_idx = idx_map.get(target_chain, 0)
+        # -------- 多链格式处理：提取抗体链用于 ESM 评分，原始序列保留 --------
+        has_multi = df_in["sequence"].astype(str).str.contains("/").any()
+        if has_multi:
+            # 保留原始多链序列
+            df_in["_original_sequence"] = df_in["sequence"].copy()
+            # 提取抗体链（去掉抗原）用于 ESM 评分
+            design_chain = cfg["design"]["chain"]
+            if isinstance(design_chain, list):
+                # 多链设计：拼接所有设计链
+                chain_indices = list(range(len(design_chain)))
+            else:
+                idx_map = {"A": 0, "B": 1, "C": 2}
+                chain_indices = [idx_map.get(str(design_chain).strip().upper(), 0)]
 
-        if df_in["sequence"].astype(str).str.contains("/").any():
-            def pick_chain(seq: str) -> str:
+            def extract_ab_chains(seq: str) -> str:
                 parts = [p for p in str(seq).split("/") if p != ""]
-                if not parts:
-                    return ""
-                # 保险：如果链数不足，退回第0段（通常为A链）
-                return parts[chain_idx] if chain_idx < len(parts) else parts[0]
+                return "".join(parts[i] for i in chain_indices if i < len(parts))
 
-            df_in["sequence"] = df_in["sequence"].astype(str).map(pick_chain)
-            # 可选：打个提示
-            print(f"[INFO] {os.path.basename(path)} 检测到多链格式，已提取链 {target_chain}（索引 {chain_idx}）")
+            df_in["sequence"] = df_in["sequence"].astype(str).map(extract_ab_chains)
+            print(f"[INFO] {os.path.basename(path)} 多链格式 → 提取链 {design_chain} 用于 ESM 评分")
         # -----------------------------------------------------------------------
 
         seqs = df_in["sequence"].astype(str).tolist()
@@ -154,6 +158,10 @@ def main(cfg_path):
         out_csv = os.path.join(esm_outdir, f"{tag}_esm.csv")
         df_out = df_in.copy()
         df_out["esm_avg_logprob"] = scores
+        # 恢复原始多链序列
+        if "_original_sequence" in df_out.columns:
+            df_out["sequence"] = df_out["_original_sequence"]
+            df_out = df_out.drop(columns=["_original_sequence"])
         if "source" not in df_out.columns:
             # tag 以 his_seed* 开头的标为 his_seed，其他标为 mpnn
             src = "his_seed" if os.path.basename(path).startswith("his_seed") else "mpnn"

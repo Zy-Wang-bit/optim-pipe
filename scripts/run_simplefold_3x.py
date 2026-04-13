@@ -31,7 +31,9 @@ def _extract_antibody_sequence(row, cfg):
 
     t2 = cfg.get("tier2", cfg.get("phase_c", {}))
     chains_cfg = t2["chains"]
-    ab_chains = [chains_cfg["heavy"], chains_cfg["light"]]
+    ab_chains = [chains_cfg["heavy"]]
+    if chains_cfg.get("light"):
+        ab_chains.append(chains_cfg["light"])
 
     # 多链格式: "HEAVY_SEQ/LIGHT_SEQ/ANTIGEN_SEQ"
     parts = str(seq).split("/")

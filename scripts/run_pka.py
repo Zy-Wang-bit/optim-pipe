@@ -77,7 +77,9 @@ def main():
     print(f"\n长表已保存: {long_path}")
 
     # 转宽表: 每个 variant 一行
-    _pdb_to_hl = {chains["heavy"]: "H", chains["light"]: "L"}
+    _pdb_to_hl = {chains["heavy"]: "H"}
+    if chains.get("light"):
+        _pdb_to_hl[chains["light"]] = "L"
 
     wide_rows = []
     for pdb_name, group in long_df.groupby("pdb_name"):

@@ -102,12 +102,16 @@ def load_candidates(cfg):
     chain_map = None
     if fmt == "unified":
         chains = pc["chains"]
-        chain_map = {"H": chains["heavy"], "L": chains["light"]}
+        chain_map = {"H": chains["heavy"]}
+        if chains.get("light"):
+            chain_map["L"] = chains["light"]
 
     candidates = []
     for idx, row in df.iterrows():
-        # variant_id: 优先用 mpdb stem，否则用行号
-        if "mpdb" in row and pd.notna(row["mpdb"]):
+        # variant_id: 优先用 variant_id 列（全局唯一），否则 mpdb stem，否则行号
+        if "variant_id" in row and pd.notna(row["variant_id"]):
+            vid = str(row["variant_id"])
+        elif "mpdb" in row and pd.notna(row["mpdb"]):
             vid = Path(str(row["mpdb"])).stem
         elif "variant_name" in row and pd.notna(row["variant_name"]):
             vid = str(row["variant_name"])

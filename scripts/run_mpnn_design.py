@@ -35,28 +35,42 @@ def extract_chain_res_order(pdb_path, chain_id):
     res_list = list(seen.keys())
     return res_list  # 长度 = 该链的残基数，1-based索引就是枚举顺序
 
-def build_jsonl_for_mpnn(cfg, pdb_dir, chain_id, region, out_dir):
+def _parse_design_chains(cfg):
+    """解析 design 配置，支持单链和多链。
+
+    单链格式: design.chain="A", design.region=[1,115]
+    多链格式: design.chain=["A","B"], design.regions={"A":[1,115],"B":[1,113]}
+
+    返回: {chain_id: (start, end), ...}
     """
-    生成:
-      - chain_id.jsonl: 每行 {"name": <别名>, "chain_ids": [<目标链>]}
-      - fixed_positions.jsonl: 单个 JSON 映射:
-            { "<alias>": {"A":[...], "B":[...], "C":[...]}, ... }
-        其中:
-          * 目标链 (chain_id)：窗口外索引固定
-          * 其余存在的链：整条链 1..N 固定（确保不被设计）
+    chain = cfg["design"]["chain"]
+    if isinstance(chain, str):
+        # 单链
+        region = cfg["design"]["region"]
+        return {chain: (region[0], region[1])}
+    else:
+        # 多链
+        regions = cfg["design"]["regions"]
+        return {ch: (regions[ch][0], regions[ch][1]) for ch in chain}
+
+
+def build_jsonl_for_mpnn(cfg, pdb_dir, design_chains, out_dir):
+    """
+    生成 MPNN 所需的 JSONL 文件，支持多链同时设计。
+
+    design_chains: {chain_id: (start, end), ...}
     """
     import os, glob, json
     from collections import OrderedDict
 
     def get_chain_len_map(pdb_path):
-        """返回 {chain_letter: length}，按 PDB 中实际存在的链统计"""
         order = {}
         with open(pdb_path) as f:
             for line in f:
                 if not line.startswith("ATOM"):
                     continue
                 ch = line[21].strip()
-                if not ch: 
+                if not ch:
                     continue
                 key = (ch, line[22:26].strip(), line[26].strip())
                 order.setdefault(ch, OrderedDict()).setdefault(key, None)
@@ -66,46 +80,48 @@ def build_jsonl_for_mpnn(cfg, pdb_dir, chain_id, region, out_dir):
     chain_jsonl = os.path.join(out_dir, "chain_id.jsonl")
     fixed_jsonl = os.path.join(out_dir, "fixed_positions.jsonl")
 
-    # 1) chain_id.jsonl：逐行写（你的分支能正确加载这类格式）
+    design_chain_ids = list(design_chains.keys())
+
+    # 1) chain_id.jsonl
     CJ = []
-    s, e = region
     for pdb in sorted(glob.glob(os.path.join(pdb_dir, "*.pdb"))):
         base = os.path.splitext(os.path.basename(pdb))[0]
         abs_p = os.path.abspath(pdb)
-        # 多种别名，最大兼容
+        chain_tag = "+".join(design_chain_ids)
         aliases = [
             base, f"{base}.pdb", abs_p,
-            f"{base}_{chain_id}", f"{base}.pdb_{chain_id}", f"{abs_p}_{chain_id}",
+            f"{base}_{chain_tag}", f"{base}.pdb_{chain_tag}", f"{abs_p}_{chain_tag}",
         ]
         for name in aliases:
-            CJ.append({"name": name, "chain_ids": [chain_id]})
+            CJ.append({"name": name, "chain_ids": design_chain_ids})
     with open(chain_jsonl, "w") as f:
         for x in CJ:
             f.write(json.dumps(x) + "\n")
 
-    # 2) fixed_positions.jsonl：写成单个 JSON 映射，覆盖 A/B/C
+    # 2) fixed_positions.jsonl
     FP = {}
     for pdb in sorted(glob.glob(os.path.join(pdb_dir, "*.pdb"))):
         base = os.path.splitext(os.path.basename(pdb))[0]
         abs_p = os.path.abspath(pdb)
+        chain_tag = "+".join(design_chain_ids)
         aliases = [
             base, f"{base}.pdb", abs_p,
-            f"{base}_{chain_id}", f"{base}.pdb_{chain_id}", f"{abs_p}_{chain_id}",
+            f"{base}_{chain_tag}", f"{base}.pdb_{chain_tag}", f"{abs_p}_{chain_tag}",
         ]
-        len_map = get_chain_len_map(pdb)  # 例如 {"A":122, "B":110, "C":241}
-        if chain_id not in len_map:
-            raise ValueError(f"[{base}] 在 PDB 中找不到链 {chain_id}")
+        len_map = get_chain_len_map(pdb)
 
-        # 为所有存在的链准备固定位点
+        for ch_id in design_chain_ids:
+            if ch_id not in len_map:
+                raise ValueError(f"[{base}] PDB 中找不到链 {ch_id}")
+
         fixed_map = {}
         for ch, L in len_map.items():
-            if ch == chain_id:
+            if ch in design_chains:
+                s, e = design_chains[ch]
                 if e > L:
-                    raise ValueError(f"[{base}] region={region} 超出链 {chain_id} 长度 N={L}")
-                # 目标链: 仅窗口外固定 -> 允许窗口内可变
+                    raise ValueError(f"[{base}] region={design_chains[ch]} 超出链 {ch} 长度 N={L}")
                 fixed_map[ch] = list(range(1, s)) + list(range(e+1, L+1))
             else:
-                # 其它链: 全部固定 (1..L)，即不允许任何位置被设计
                 fixed_map[ch] = list(range(1, L+1))
 
         for name in aliases:
@@ -116,7 +132,8 @@ def build_jsonl_for_mpnn(cfg, pdb_dir, chain_id, region, out_dir):
 
     chain_jsonl = os.path.abspath(chain_jsonl)
     fixed_jsonl = os.path.abspath(fixed_jsonl)
-    print("[OK] JSONL ->", chain_jsonl, " / ", fixed_jsonl)
+    print(f"[OK] JSONL -> {chain_jsonl}  /  {fixed_jsonl}")
+    print(f"     设计链: {design_chains}")
     return chain_jsonl, fixed_jsonl
 
 def find_fasta_files(folder):
@@ -187,8 +204,8 @@ def main():
     os.makedirs(out_root, exist_ok=True)
     os.makedirs(os.path.join(res_dir,"screening"), exist_ok=True)
 
-    chain_id  = cfg["design"]["chain"]              # A/B/C
-    region    = cfg["design"]["region"]             # [76,115]
+    design_chains = _parse_design_chains(cfg)        # {chain: (start, end), ...}
+    chain_id  = cfg["design"]["chain"]                # 兼容旧代码（可能是 str 或 list）
 
     runner = args.runner or cfg["paths"].get("mpnn_runner") or "protein_mpnn_run.py"
     temps  = [float(x) for x in args.temps.split(",") if x.strip()]
@@ -196,9 +213,16 @@ def main():
     n_per  = int(args["num_per_pdb"]) if isinstance(args, dict) and "num_per_pdb" in args else int(args.num_per_pdb)
     per_shard = max(1, n_per // shards)
 
-    # 1) JSONL（准确链长）
-    jsonl_dir = "configs/mpnn"
-    chain_jsonl, fixed_jsonl = build_jsonl_for_mpnn(cfg, pdb_dir, chain_id, region, jsonl_dir)
+    # max_len 检查（多链时检查总长度）
+    max_len = cfg["design"].get("max_len", 40)
+    total_win = sum(e - s + 1 for s, e in design_chains.values())
+    if total_win > max_len:
+        raise ValueError(f"设计窗口总长度 {total_win} 超出 max_len {max_len}，"
+                         f"请调大 design.max_len 或缩小 region")
+
+    # 1) JSONL（准确链长）— 使用 mpnn_out_dir 下的子目录避免并行冲突
+    jsonl_dir = os.path.join(out_root, "_mpnn_config")
+    chain_jsonl, fixed_jsonl = build_jsonl_for_mpnn(cfg, pdb_dir, design_chains, jsonl_dir)
 
     # 2) 逐 PDB 逐 shard 跑 MPNN
     for pdb in sorted(glob.glob(os.path.join(pdb_dir, "*.pdb"))):
@@ -238,10 +262,15 @@ def main():
     for csvp in glob.glob(os.path.join(out_root, "*", "mpnn_*.csv")):
         rows.append(pd.read_csv(csvp))
     if rows:
-        all_df = pd.concat(rows, ignore_index=True).drop_duplicates(subset=["pdb_id","sequence"])
+        raw_df = pd.concat(rows, ignore_index=True)
+        n_raw = len(raw_df)
+        # 全局按 sequence 去重（保留首次出现的 pdb_id）
+        all_df = raw_df.drop_duplicates(subset=["sequence"], keep="first")
+        n_dedup = len(all_df)
         out_all = os.path.join(res_dir, "screening", "mpnn_all.csv")
         all_df.to_csv(out_all, index=False)
-        print("[OK] mpnn_all.csv ->", out_all, "N=", len(all_df))
+        dup_pct = (1 - n_dedup / n_raw) * 100 if n_raw > 0 else 0
+        print(f"[OK] mpnn_all.csv -> {out_all}  原始={n_raw}  去重后={n_dedup}  重复率={dup_pct:.1f}%")
     else:
         print("[WARN] 未合并到任何 MPNN 序列")
 

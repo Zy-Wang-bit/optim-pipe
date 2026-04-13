@@ -92,7 +92,17 @@ def _adaptive_filter(df, t1_cfg):
     dm_floor = float(floor["delta_min"])
 
     best = pd.DataFrame()
+    seen = set()
     while True:
+        key = (round(dG, 6), round(dm, 6))
+        if key in seen:
+            # 振荡检测：回到已访问状态，取最近的过大池截断到 target_hi
+            if len(best) > target_hi:
+                best = best.sort_values("delta", ascending=False).head(target_hi)
+            print(f"  [振荡终止] 返回 {len(best)} 候选")
+            break
+        seen.add(key)
+
         q = (df["dG_pH7_4"] < dG) & (df["delta"] >= dm)
         pool = df[q]
 

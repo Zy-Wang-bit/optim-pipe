@@ -62,15 +62,51 @@ def seq_to_mutcodes(wt: str, var: str, chain_id: str, region):
             muts.append(f"{wt[i - 1]}{chain_id}{i}{var[i - 1]}")
     return muts
 
+def _parse_design_chains(cfg):
+    """解析 design 配置，支持单链和多链。返回 {chain: (start, end)}"""
+    chain = cfg["design"]["chain"]
+    if isinstance(chain, str):
+        region = cfg["design"]["region"]
+        return {chain: (region[0], region[1])}
+    else:
+        regions = cfg["design"]["regions"]
+        return {ch: (regions[ch][0], regions[ch][1]) for ch in chain}
+
+
+def multi_seq_to_mutcodes(wt_seqs, var_seq_str, design_chains):
+    """多链版本的突变码生成。
+    wt_seqs: {chain: wt_seq}
+    var_seq_str: "H_SEQ/L_SEQ/..." 或单链序列
+    design_chains: {chain: (start, end)}
+    返回: 突变码列表 ['FA102H', 'SB42H', ...]
+    """
+    chain_order = sorted(wt_seqs.keys())
+    parts = var_seq_str.split("/")
+
+    muts = []
+    for idx, ch in enumerate(chain_order):
+        if ch not in design_chains:
+            continue
+        if idx >= len(parts):
+            continue
+        var = parts[idx]
+        wt = wt_seqs[ch]
+        s, e = design_chains[ch]
+        if len(var) != len(wt):
+            continue
+        for i in range(s, e + 1):
+            if i <= len(wt) and i <= len(var) and wt[i-1] != var[i-1]:
+                muts.append(f"{wt[i-1]}{ch}{i}{var[i-1]}")
+    return muts
+
+
 def main(cfg_path):
     cfg = yaml.safe_load(open(cfg_path))
 
-    # —— 只用 ABC 等链 ID，不再使用 H/L/Ag
-    chain_id = cfg["design"].get("chain", "A").strip().upper()
-    if not re.fullmatch(r"[A-Z]", chain_id):
-        raise ValueError(f"design.chain 必须是单个大写字母（PDB 链 ID），当前为：{chain_id}")
+    design_chains = _parse_design_chains(cfg)
+    chain_ids = sorted(design_chains.keys())
+    is_multi = len(chain_ids) > 1
 
-    region  = cfg["design"]["region"]               # 如 [76, 115]
     chunk   = int(cfg["resources"]["foldx_chunk_size"])
     root    = os.path.join(cfg["paths"]["foldx_dir"], "batches")
     os.makedirs(root, exist_ok=True)
@@ -78,38 +114,74 @@ def main(cfg_path):
     # 输入候选（ESM/His seeds 合并后的 for_foldx.csv）
     for_foldx_csv = os.path.join(cfg["paths"]["results_dir"], "screening", "for_foldx.csv")
     if not os.path.exists(for_foldx_csv):
-        # 兼容历史写法
         alt = os.path.join(cfg.get("results_dir", "results"), "screening", "for_foldx.csv")
         for_foldx_csv = alt if os.path.exists(alt) else for_foldx_csv
     if not os.path.exists(for_foldx_csv):
         raise FileNotFoundError(f"未找到候选列表：{for_foldx_csv}")
 
-    # 加载 WT（按链 ID）
-    wt = load_wt(cfg, chain_id)
-    Lw = len(wt)
-    s, e = region
-    if not (1 <= s <= e <= Lw):
-        raise ValueError(f"design.region={region} 超出 WT 长度（WT={Lw} aa）。请将区间限制在 [1,{Lw}] 内。")
+    # 加载 WT 序列（所有设计链）
+    wt_seqs = {}
+    for ch in chain_ids:
+        wt_seqs[ch] = load_wt(cfg, ch)
+
+    # 兼容单链：用第一条链的长度和 region 做基本校验
+    if not is_multi:
+        chain_id = chain_ids[0]
+        wt = wt_seqs[chain_id]
+        Lw = len(wt)
+        s, e = design_chains[chain_id]
+        if not (1 <= s <= e <= Lw):
+            raise ValueError(f"design.region={[s,e]} 超出 WT 长度（WT={Lw} aa）。")
+    else:
+        # 多链：总长度用于序列校验
+        Lw = sum(len(wt_seqs[ch]) for ch in chain_ids)
 
     df = pd.read_csv(for_foldx_csv)
     if "pdb_id" not in df.columns or "sequence" not in df.columns:
         raise ValueError("for_foldx.csv 需至少包含列：pdb_id, sequence")
 
-    # 基本清洗
-    df["sequence"] = df["sequence"].apply(clean_seq)
+    # 基本清洗（多链序列含 /，不能 clean_seq 整体处理）
+    if is_multi:
+        def _clean_multi(s):
+            if not isinstance(s, str): return ""
+            return "/".join(clean_seq(p) for p in s.split("/"))
+        df["sequence"] = df["sequence"].apply(_clean_multi)
+    else:
+        df["sequence"] = df["sequence"].apply(clean_seq)
     df = df[df["sequence"].str.len() > 0].copy()
+
+    # 加载所有链的 WT（包括非设计链，用于序列长度校验）
+    all_wt_files = cfg["paths"].get("wt_files", {})
+    all_chain_ids = sorted(all_wt_files.keys())  # 所有链 ID（如 A, B, C）
 
     # 过滤并收集可用行
     bad_rows, keep_rows = [], []
     for _, row in df.iterrows():
         seq = row["sequence"]
-        bad = set(seq) - AA20
-        if bad:
-            bad_rows.append({"reason": f"illegal_aa:{''.join(sorted(bad))}", **row.to_dict()}); continue
-        if len(seq) != Lw:
-            bad_rows.append({"reason": f"len_mismatch:{len(seq)}!=WT{Lw}", **row.to_dict()}); continue
-        if e > len(seq):
-            bad_rows.append({"reason": f"region_out_of_bounds:{e}>{len(seq)}", **row.to_dict()}); continue
+        if is_multi or "/" in seq:
+            parts = seq.split("/")
+            # 多链序列可能包含抗原链（如 A/B/C），检查设计链的长度匹配
+            ok = True
+            for idx, ch in enumerate(chain_ids):
+                # 找到该设计链在完整序列中的位置
+                if ch in all_chain_ids:
+                    ch_pos = all_chain_ids.index(ch)
+                else:
+                    ch_pos = idx
+                if ch_pos >= len(parts):
+                    bad_rows.append({"reason": f"missing_chain:{ch}", **row.to_dict()})
+                    ok = False; break
+                if len(parts[ch_pos]) != len(wt_seqs[ch]):
+                    bad_rows.append({"reason": f"len_mismatch:{ch}:{len(parts[ch_pos])}!=WT{len(wt_seqs[ch])}", **row.to_dict()})
+                    ok = False; break
+            if not ok: continue
+        else:
+            # 单链序列
+            bad = set(seq) - AA20
+            if bad:
+                bad_rows.append({"reason": f"illegal_aa:{''.join(sorted(bad))}", **row.to_dict()}); continue
+            if len(seq) != Lw:
+                bad_rows.append({"reason": f"len_mismatch:{len(seq)}!=WT{Lw}", **row.to_dict()}); continue
         keep_rows.append(row)
 
     if not keep_rows:
@@ -131,7 +203,10 @@ def main(cfg_path):
             for _, r in part.iterrows():
                 seq = r["sequence"]
                 try:
-                    muts = seq_to_mutcodes(wt, seq, chain_id, region)
+                    if is_multi:
+                        muts = multi_seq_to_mutcodes(wt_seqs, seq, design_chains)
+                    else:
+                        muts = seq_to_mutcodes(wt_seqs[chain_ids[0]], seq, chain_ids[0], design_chains[chain_ids[0]])
                 except Exception as ex:
                     skipped.append({"reason": f"exception:{ex}", **r.to_dict()}); continue
                 if not muts:

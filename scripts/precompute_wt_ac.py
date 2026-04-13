@@ -72,7 +72,7 @@ def parse_ac_tsv(fp, mpdb_base, left_set, right_set):
 
 def main(cfg_path):
     cfg = yaml.safe_load(open(cfg_path))
-    foldx = cfg["paths"]["foldx_bin"]       # e.g. "foldx"
+    foldx = os.path.abspath(cfg["paths"]["foldx_bin"])
     repaired_dir = os.path.join(cfg["paths"]["foldx_dir"], "repaired")
     os.makedirs(repaired_dir, exist_ok=True)
 

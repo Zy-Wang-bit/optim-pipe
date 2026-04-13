@@ -29,25 +29,40 @@ run(){ echo -e "\n[RUN] $*" | tee -a "$LOG"; "$@" 2>&1 | tee -a "$LOG"; }
 note(){ echo -e "\n[NOTE] $*" | tee -a "$LOG"; }
 ok(){ echo -e "[OK] $*" | tee -a "$LOG"; }
 
-# 0) 可选清理
+# 0) 可选清理（清理路径在 config 解析后执行，见下方）
+
+# 基础检查
+[[ -f "$CFG" ]] || { echo "[ERR] 找不到配置：$CFG" | tee -a "$LOG"; exit 1; }
+
+# 从 config 读取输出路径（支持非默认工作目录）
+read_cfg_path() {
+  python3 -c "import yaml; c=yaml.safe_load(open('${CFG}')); print(c${1})" 2>/dev/null
+}
+RESULTS_DIR=$(read_cfg_path "['paths']['results_dir']") ; RESULTS_DIR="${RESULTS_DIR:-results}"
+FOLDX_DIR=$(read_cfg_path "['paths']['foldx_dir']")     ; FOLDX_DIR="${FOLDX_DIR:-foldx}"
+ESM_DIR=$(read_cfg_path "['paths']['esm_out_dir']")      ; ESM_DIR="${ESM_DIR:-esm_scores}"
+MPNN_DIR=$(read_cfg_path "['paths']['mpnn_out_dir']")    ; MPNN_DIR="${MPNN_DIR:-mpnn_outputs}"
+HIS_DIR=$(read_cfg_path "['paths']['his_seed_dir']")     ; HIS_DIR="${HIS_DIR:-his_seeds}"
+T2_DIR=$(read_cfg_path ".get('tier2',{}).get('paths',{}).get('tier2_dir','tier2')") ; T2_DIR="${T2_DIR:-tier2}"
+
+# 延迟清理（使用从 config 读取的路径）
 if [[ "${CLEAN:-0}" == "1" ]]; then
   note "清理旧产物..."
-  rm -rf mpnn_outputs/* his_seeds/* esm_scores/* \
-         foldx/repaired/* foldx/batches/* \
-         results/screening/* results/final_top10k.csv results/merged_all.csv \
-         results/tier1_candidates.csv results/tier2_candidates.csv results/final_candidates.csv \
-         tier2/structures/* tier2/pka/* tier2/rosetta/* tier2/rmsd/* \
-         phase_c/structures/* phase_c/pka/* phase_c/rosetta/* phase_c/rmsd/* \
+  rm -rf "${MPNN_DIR:?}"/* "${HIS_DIR:?}"/* "${ESM_DIR:?}"/* \
+         "${FOLDX_DIR:?}/repaired"/* "${FOLDX_DIR:?}/batches"/* \
+         "${RESULTS_DIR:?}/screening"/* "${RESULTS_DIR:?}/tier1_candidates.csv" \
+         "${RESULTS_DIR:?}/tier2_candidates.csv" "${RESULTS_DIR:?}/final_candidates.csv" \
+         "${RESULTS_DIR:?}/final_top10k.csv" "${RESULTS_DIR:?}/merged_all.csv" \
+         "${T2_DIR:?}/structures"/* "${T2_DIR:?}/pka"/* "${T2_DIR:?}/rosetta"/* "${T2_DIR:?}/rmsd"/* \
          logs/processed_batches.json \
          configs/mpnn/chain_id.jsonl configs/mpnn/fixed_positions.jsonl || true
   ok "清理完成。"
 fi
 
-# 基础检查
-[[ -f "$CFG" ]] || { echo "[ERR] 找不到配置：$CFG" | tee -a "$LOG"; exit 1; }
-mkdir -p results/screening results/audit foldx/repaired foldx/batches \
-         esm_scores mpnn_outputs his_seeds configs/mpnn \
-         tier2/structures tier2/pka tier2/rosetta tier2/rmsd
+mkdir -p "${RESULTS_DIR}/screening" "${RESULTS_DIR}/audit" \
+         "${FOLDX_DIR}/repaired" "${FOLDX_DIR}/batches" \
+         "${ESM_DIR}" "${MPNN_DIR}" "${HIS_DIR}" configs/mpnn \
+         "${T2_DIR}/structures" "${T2_DIR}/pka" "${T2_DIR}/rosetta" "${T2_DIR}/rmsd"
 
 # 读取模式
 TIER1_ENABLED=$(python3 -c "
@@ -71,8 +86,12 @@ note "Step 2: MPNN 设计"
 run python scripts/run_mpnn_design.py "$CFG" "${MPNN_ARGS[@]}"
 ok "MPNN 输出就绪。"
 
-note "Step 3: ESM 评分"
+note "Step 3a: ESM 评分"
 run python scripts/run_esm_chunk.py "$CFG"
+ok "esm_all.csv 就绪。"
+
+note "Step 3b: ESM 筛选 → for_foldx.csv"
+run python scripts/pick_for_foldx.py "$CFG"
 ok "for_foldx.csv 就绪。"
 
 note "Step 4: FoldX RepairPDB"
@@ -93,8 +112,8 @@ ok "foldx_summary.csv 就绪。"
 
 # FoldX 中间文件清理（保留 summary CSV 和 batch_seqs.csv）
 note "清理 FoldX 中间文件..."
-find foldx/batches -name "*.pdb" -not -name "*_Repair.pdb" -delete 2>/dev/null || true
-find foldx/batches -name "*.fxout" -delete 2>/dev/null || true
+find "${FOLDX_DIR}/batches" -name "*.pdb" -not -name "*_Repair.pdb" -delete 2>/dev/null || true
+find "${FOLDX_DIR}/batches" -name "*.fxout" -delete 2>/dev/null || true
 ok "FoldX 中间文件已清理。"
 
 if [[ "$TIER1_ENABLED" == "true" ]]; then

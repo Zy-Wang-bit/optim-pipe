@@ -114,54 +114,161 @@ def mk_mutcodes(wt, seq, chain, positions):
             muts.append(f"{wt[p-1]}{chain}{p}{seq[p-1]}")
     return ",".join(muts)
 
+def _parse_design_chains(cfg):
+    """解析 design 配置，支持单链和多链。返回 {chain: (start, end)}"""
+    chain = cfg["design"]["chain"]
+    if isinstance(chain, str):
+        region = cfg["design"]["region"]
+        return {chain: (region[0], region[1])}
+    else:
+        regions = cfg["design"]["regions"]
+        return {ch: (regions[ch][0], regions[ch][1]) for ch in chain}
+
+
 def main(cfg_path):
     cfg = yaml.safe_load(open(cfg_path))
     out_dir = cfg["paths"]["his_seed_dir"]
     os.makedirs(out_dir, exist_ok=True)
 
-    chain  = cfg["design"]["chain"]   # 你现在就是 "H"
-    region = cfg["design"]["region"]
-    a,b = region
+    design_chains = _parse_design_chains(cfg)
 
-    wt = load_wt(cfg, chain)
-    if b > len(wt):
-        raise ValueError(f"design.region 末端 {b} 超出 {chain} 链 WT 长度 {len(wt)}")
+    # 加载所有设计链的 WT 序列
+    wt_seqs = {}  # chain -> wt_sequence
+    for ch, (a, b) in design_chains.items():
+        wt = load_wt(cfg, ch)
+        if b > len(wt):
+            raise ValueError(f"design.region 末端 {b} 超出 {ch} 链 WT 长度 {len(wt)}")
+        wt_seqs[ch] = wt
 
-    # 取热点位点（已确保只在 H 链 & 设计窗口内）
-    sites = read_hotspots(cfg)
+    # 取热点位点 — 多链时合并所有链的位点为 (chain, pos) 元组
+    # 对于单链，保持兼容
+    if len(design_chains) == 1:
+        chain = list(design_chains.keys())[0]
+        raw_sites = read_hotspots(cfg)
+        sites = [(chain, p) for p in raw_sites]
+    else:
+        # 多链：从 target_positions 解析 "A:52" 格式，或从 hotspots 文件读取
+        tp = cfg["his_bias"].get("target_positions", []) or []
+        if tp:
+            sites = []
+            for x in tp:
+                if ":" in str(x):
+                    c, n = str(x).split(":")
+                    c = c.strip(); n = int(n.strip())
+                    if c in design_chains:
+                        a, b = design_chains[c]
+                        if a <= n <= b:
+                            sites.append((c, n))
+                else:
+                    # 无链前缀，分配给第一个设计链
+                    ch0 = list(design_chains.keys())[0]
+                    a, b = design_chains[ch0]
+                    n = int(x)
+                    if a <= n <= b:
+                        sites.append((ch0, n))
+        else:
+            # 自动扫描：从 hotspots CSV 中读取所有设计链的位点
+            hcsv = os.path.join(cfg["paths"]["results_dir"], "screening", "his_hotspots.csv")
+            if not os.path.exists(hcsv):
+                raise FileNotFoundError("未找到 his_hotspots.csv；请先运行 scan_interface.py")
+            import pandas as _pd
+            df = _pd.read_csv(hcsv)
+            prefer_k = int(cfg["his_bias"].get("prefer_sites_topk", 20))
+            sites = []
+            for ch, (a, b) in design_chains.items():
+                sub = df[(df["chain"] == ch) & (df["resno"] >= a) & (df["resno"] <= b)]
+                sub = sub.sort_values("hotness", ascending=False).head(prefer_k)
+                sites.extend([(ch, int(r)) for r in sub["resno"]])
+
     if not sites:
-        raise RuntimeError("没有可用的热点位点（请检查 his_hotspots 或 target_positions 与 design.region 是否匹配）")
-    print(f"[His sites] {sites}")
+        raise RuntimeError("没有可用的热点位点")
+    print(f"[His sites] {len(sites)} 个位点: {sites}")
+
+    # 多链感知的序列突变与 mutcode 生成
+    def _mutate_sites(site_list):
+        """对 [(chain, pos), ...] 列表执行 His 突变，返回 (sequences_dict, mutcodes_str)。
+        sequences_dict: {chain: mutated_seq} — 只包含有突变的链
+        """
+        muts = []
+        by_chain = {}
+        for ch, p in site_list:
+            by_chain.setdefault(ch, []).append(p)
+        # 检查是否所有位点本来就是 H
+        all_his = True
+        for ch, positions in by_chain.items():
+            wt = wt_seqs[ch]
+            for p in positions:
+                if wt[p-1] != "H":
+                    all_his = False
+                    break
+        if all_his:
+            return None, ""
+        # 生成突变序列和 mutcode
+        seqs = {}
+        for ch, positions in by_chain.items():
+            wt = wt_seqs[ch]
+            seq = mutate_to_h(wt, positions)
+            seqs[ch] = seq
+            muts.extend([f"{wt[p-1]}{ch}{p}H" for p in positions if wt[p-1] != "H"])
+        return seqs, ",".join(muts)
+
+    def _make_row(site_list, source):
+        seqs, mutcodes = _mutate_sites(site_list)
+        if seqs is None or not mutcodes:
+            return None
+        # 构建完整的多链序列（用 / 分隔）
+        all_chains = sorted(wt_seqs.keys())
+        full_seq = "/".join(seqs.get(ch, wt_seqs[ch]) for ch in all_chains)
+        return {"sequence": full_seq, "mutations": mutcodes, "source": source}
 
     # S1：单点变 H
-    s1_rows=[]
-    for p in sites:
-        if wt[p-1] == "H": 
-            continue
-        seq = mutate_to_h(wt, [p])
-        muts = mk_mutcodes(wt, seq, chain, [p])
-        s1_rows.append({"sequence": seq, "mutations": muts, "source": "his_seed_S1"})
+    s1_rows = []
+    for site in sites:
+        row = _make_row([site], "his_seed_S1")
+        if row: s1_rows.append(row)
 
-    # S2：成对变 H（受 pair_scan_limit 控制）
+    # S2：成对变 H
     pair_limit = int(cfg["his_bias"].get("pair_scan_limit", 1000))
-    s2_rows=[]
-    for i, (p1,p2) in enumerate(itertools.combinations(sites, 2)):
+    s2_rows = []
+    for i, combo in enumerate(itertools.combinations(sites, 2)):
         if i >= pair_limit: break
-        pos = [p1,p2]
-        seq = mutate_to_h(wt, pos)
-        muts = mk_mutcodes(wt, seq, chain, pos)
-        # 若两位点本来就是 H，muts 为空，则跳过
-        if not muts: 
-            continue
-        s2_rows.append({"sequence": seq, "mutations": muts, "source": "his_seed_S2"})
+        row = _make_row(list(combo), "his_seed_S2")
+        if row: s2_rows.append(row)
+
+    # S3：三点 His 组合
+    triple_limit = int(cfg["his_bias"].get("triple_scan_limit", 0))
+    s3_rows = []
+    if triple_limit > 0:
+        for i, combo in enumerate(itertools.combinations(sites, 3)):
+            if i >= triple_limit: break
+            row = _make_row(list(combo), "his_seed_S3")
+            if row: s3_rows.append(row)
+
+    # S4：四点 His 组合
+    quad_limit = int(cfg["his_bias"].get("quad_scan_limit", 0))
+    s4_rows = []
+    if quad_limit > 0:
+        for i, combo in enumerate(itertools.combinations(sites, 4)):
+            if i >= quad_limit: break
+            row = _make_row(list(combo), "his_seed_S4")
+            if row: s4_rows.append(row)
 
     s1 = pd.DataFrame(s1_rows)
     s2 = pd.DataFrame(s2_rows)
+    s3 = pd.DataFrame(s3_rows)
+    s4 = pd.DataFrame(s4_rows)
     f1 = os.path.join(out_dir, "his_seed_S1_single.csv")
     f2 = os.path.join(out_dir, "his_seed_S2_pairs.csv")
+    f3 = os.path.join(out_dir, "his_seed_S3_triples.csv")
+    f4 = os.path.join(out_dir, "his_seed_S4_quads.csv")
     s1.to_csv(f1, index=False)
     s2.to_csv(f2, index=False)
-    print(f"[OK] seeds -> {f1} (n={len(s1)}), {f2} (n={len(s2)})")
+    s3.to_csv(f3, index=False)
+    s4.to_csv(f4, index=False)
+    parts = [f"{f1} (n={len(s1)})", f"{f2} (n={len(s2)})"]
+    if len(s3): parts.append(f"{f3} (n={len(s3)})")
+    if len(s4): parts.append(f"{f4} (n={len(s4)})")
+    print(f"[OK] seeds -> {', '.join(parts)}")
 
 if __name__ == "__main__":
     main(sys.argv[1] if len(sys.argv)>1 else "configs/config.yaml")

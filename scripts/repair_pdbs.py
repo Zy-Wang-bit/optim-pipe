@@ -23,7 +23,7 @@ def run(bin_path, args, env=None, cwd=None):
 
 def main(cfg_path):
     cfg = yaml.safe_load(open(cfg_path))
-    foldx    = cfg["paths"]["foldx_bin"]
+    foldx    = os.path.abspath(cfg["paths"]["foldx_bin"])
     pdb_dir  = cfg["paths"]["pdb_dir"]
     out_dir  = os.path.join(cfg["paths"]["foldx_dir"], "repaired")
     os.makedirs(out_dir, exist_ok=True)
