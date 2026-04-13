@@ -61,6 +61,15 @@ analysis:
 
   contact_distance: 4.5             # Å
 
+  pairwise_dist:
+    # Note: resid uses GROMACS numbering (continuous across chains)
+    # A:1-115, B:116-228 (PDB+115), C:229-454 (PDB+228)
+    pairs:
+      - { chain1: "B", resid1: 157, chain2: "C", resid2: 350, label: "HIS42-LYS122" }
+      - { chain1: "B", resid1: 210, chain2: "C", resid2: 350, label: "HIS95-LYS122" }
+      - { chain1: "C", resid1: 350, chain2: "A", resid2: 103, label: "LYS122-ASP103" }
+      - { chain1: "B", resid1: 158, chain2: "B", resid2: 160, label: "HIS43-pos45" }
+
   mmpbsa:
     enabled: false
     method: "GBSA"

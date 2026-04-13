@@ -1,0 +1,74 @@
+# sdab WT 双 pH MD 模拟配置
+# 用途：识别框架-界面构象偶联，验证 His 位点的动力学行为
+
+md:
+  gmx_executable: "gmx"
+  force_field: "amber99sb-ildn"
+  water_model: "tip3p"
+  box_type: "dodecahedron"         # 比 cubic 更省溶剂（球状蛋白适用）
+  box_distance: 1.0
+  ion_concentration: 0.15
+  temperature: 310
+  max_warnings: 2
+
+  stages:
+    minimization:
+      max_steps: 5000
+      emtol: 1000.0
+    nvt:
+      duration_ps: 200
+      dt_ps: 0.001
+    npt:
+      duration_ps: 1000
+      dt_ps: 0.001
+    production:
+      duration_ns: 50              # 50ns 标准时长
+      dt_ps: 0.002
+      save_interval_ps: 100        # 500 frames
+
+  cphmd:
+    enabled: false                  # fixed protonation 模式
+
+  gpu:
+    device_id: 0
+    ntmpi: 1
+    ntomp: 5
+
+  output_dir: "experiments/sdab/md"
+
+analysis:
+  antibody_chains: ["A"]           # sdab 单域抗体
+  antigen_chains: ["B"]            # 抗原链 B
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 102 }
+    # sdab 无 L-chain CDR
+
+  # 额外关注区域（框架协同位点分析发现）
+  # FR2: 35-49 (界面残基 37,45,46,47)
+  # FR3: 66-94 (协同热区，ARG72, N74, L79)
+  # FR4: 103-113 (界面残基 103,106,107,108)
+
+  convergence:
+    window_ns: 5.0
+    variance_threshold: 0.05
+
+  contact_distance: 4.5
+
+  pairwise_dist:
+    # Note: GROMACS 连续编号. A链 resid 1-122, B链(抗原) resid 123-348.
+    # PDB B:N → GROMACS resid N+122
+    pairs:
+      # His61 → ag THR118 (PDB B:118 = GROMACS 240), 主要界面接触
+      - { chain1: "A", resid1: 61, chain2: "B", resid2: 240, label: "His61-THR240" }
+      # His99 → ag THR123 (PDB B:123 = GROMACS 245)
+      - { chain1: "A", resid1: 99, chain2: "B", resid2: 245, label: "His99-THR245" }
+      # His110 → ag LYS122 (PDB B:122 = GROMACS 244)
+      - { chain1: "A", resid1: 110, chain2: "B", resid2: 244, label: "His110-LYS244" }
+      # ARG72 → His99 (同链, 框架协同)
+      - { chain1: "A", resid1: 72, chain2: "A", resid2: 99, label: "ARG72-His99" }
+
+  mmpbsa:
+    enabled: false

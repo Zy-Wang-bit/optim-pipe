@@ -47,6 +47,7 @@ def _run_propka(pdb_path: str) -> list[dict]:
     # PROPKA 会在 cwd 生成 .pka 文件，切换到临时目录避免污染项目
     import tempfile
     original_cwd = os.getcwd()
+    pdb_path = os.path.abspath(pdb_path)  # 确保绝对路径，避免 chdir 后找不到
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
         with warnings.catch_warnings():

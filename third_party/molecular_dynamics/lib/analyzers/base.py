@@ -30,7 +30,9 @@ class BaseAnalyzer(ABC):
         self.cfg = cfg
         self.analysis_cfg = cfg["analysis"]
         self.tpr = self.traj_dir / "production.tpr"
-        self.xtc = self.traj_dir / "production.xtc"
+        # 优先使用 PBC unwrap 后的轨迹
+        unwrap_xtc = self.traj_dir / "production_unwrap.xtc"
+        self.xtc = unwrap_xtc if unwrap_xtc.exists() else self.traj_dir / "production.xtc"
         self.output_dir = self.traj_dir / "analysis"
         self.output_dir.mkdir(exist_ok=True)
 
@@ -43,6 +45,26 @@ class BaseAnalyzer(ABC):
             logger.error("XTC file not found: %s", self.xtc)
             return False
         return True
+
+    def load_universe(self):
+        """加载 MDAnalysis Universe 并处理 PBC unwrap。
+
+        GROMACS xtc 轨迹中分子可能跨越周期性边界，导致坐标跳变。
+        统一做 unwrap + center 处理，所有分析器应使用此方法加载轨迹。
+        """
+        import MDAnalysis as mda
+        from MDAnalysis.transformations import unwrap, center_in_box
+
+        u = mda.Universe(str(self.tpr), str(self.xtc))
+        protein = u.select_atoms("protein")
+        if len(protein) > 0:
+            transforms = [
+                unwrap(protein),
+                center_in_box(protein, center="mass"),
+            ]
+            u.trajectory.add_transformations(*transforms)
+            logger.debug("Applied PBC unwrap + centering (%d protein atoms)", len(protein))
+        return u
 
     @abstractmethod
     def run(self) -> dict[str, Any]:

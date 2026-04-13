@@ -1,10 +1,11 @@
 # third_party/molecular_dynamics/lib/protonation.py
-"""His 质子化态管理，用于 CpHMD λ-dynamics 配置。
+"""His 质子化态管理。
 
 职责：
 1. 从 PDB 文件中检测所有 His 残基位置
 2. 根据 config 过滤要参与 CpHMD 的残基列表
 3. 生成 CpHMD 所需的 λ-dynamics 组参数
+4. 固定质子态模式：生成 HIS→HIE/HIP 重命名后的 PDB
 """
 
 import logging
@@ -61,6 +62,52 @@ def filter_titratable(
         return all_his
     keep = {(r["chain"], r["resid"]) for r in config_residues}
     return [h for h in all_his if (h["chain"], h["resid"]) in keep]
+
+
+def prepare_fixed_protonation(
+    pdb_path: Path,
+    ph: float,
+    output_path: Path,
+) -> Path:
+    """生成固定 His 质子态的 PDB 文件。
+
+    pH >= 7.0 时 HIS → HIE（中性，Nε 质子化）；
+    pH <  7.0 时 HIS → HIP（双质子化，+1 电荷）。
+
+    GROMACS pdb2gmx 会根据残基名自动选择正确的质子态，
+    无需交互式输入。
+
+    Parameters
+    ----------
+    pdb_path : 输入 PDB 文件
+    ph : 目标 pH 值
+    output_path : 输出 PDB 文件
+
+    Returns
+    -------
+    Path  输出文件路径
+    """
+    target = "HIP" if ph < 7.0 else "HIE"
+    his_variants = {"HIS", "HID", "HIE", "HIP", "HSE", "HSD", "HSP"}
+    n_renamed = 0
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(pdb_path) as fin, open(output_path, "w") as fout:
+        for line in fin:
+            if line.startswith(("ATOM  ", "HETATM")):
+                resname = line[17:20].strip()
+                if resname in his_variants and resname != target:
+                    line = line[:17] + f"{target:>3}" + line[20:]
+                    n_renamed += 1
+            fout.write(line)
+
+    logger.info(
+        "Fixed protonation (pH=%.1f): %s → %s, %d atom lines renamed in %s",
+        ph, "HIS/*", target, n_renamed, output_path.name,
+    )
+    return output_path
 
 
 def build_cphmd_groups(

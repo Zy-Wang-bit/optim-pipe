@@ -25,9 +25,32 @@ class RMSDAnalyzer(BaseAnalyzer):
             raise FileNotFoundError("Missing trajectory files")
 
         u = mda.Universe(str(self.tpr), str(self.xtc))
-        ca = u.select_atoms("name CA")
 
-        # 全局 RMSD
+        # 抗体链 Cα（排除抗原的刚体运动）
+        ab_chains = self.analysis_cfg.get("antibody_chains", [])
+        ca = None
+        if ab_chains:
+            for sel_type in ("segid", "chainID"):
+                chain_sel = " or ".join(
+                    f"{sel_type} {c}" for c in ab_chains
+                )
+                trial = u.select_atoms(f"name CA and ({chain_sel})")
+                if len(trial) > 0:
+                    ca = trial
+                    break
+            # segid 可能是 GROMACS 格式 "seg_0_Protein_chain_X"
+            if ca is None or len(ca) == 0:
+                seg_sel = " or ".join(
+                    f"segid *chain_{c}*" for c in ab_chains
+                )
+                ca = u.select_atoms(f"name CA and ({seg_sel})")
+        if ca is None or len(ca) == 0:
+            ca = u.select_atoms("name CA")
+            logger.warning("Could not select antibody chains, using all CA (%d atoms)", len(ca))
+        else:
+            logger.info("Antibody-only RMSD: %d CA atoms (chains %s)", len(ca), ab_chains)
+
+        # 全局 RMSD（仅抗体链）
         rmsd_analysis = MDA_RMSD(ca, ca, ref_frame=0)
         rmsd_analysis.run()
         # results.rmsd: shape (n_frames, 3) — [frame, time(ps), rmsd(Å)]

@@ -32,7 +32,10 @@ if str(_MODULE_ROOT) not in sys.path:
 
 from lib.config import load_config
 from lib.gromacs_wrapper import GromacsWrapper
-from lib.protonation import detect_his_residues, filter_titratable, build_cphmd_groups
+from lib.protonation import (
+    detect_his_residues, filter_titratable, build_cphmd_groups,
+    prepare_fixed_protonation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +45,18 @@ def run_single(
     ph_values: list[float],
     cfg: dict,
     output_dir: Path,
+    protonation: str = "fixed",
 ) -> None:
     """对单个 PDB 运行 MD 模拟。
 
     如果 ph_values 为空，运行一次标准 MD。
     如果提供 ph_values，为每个 pH 运行一次。
+
+    Parameters
+    ----------
+    protonation : 'fixed' 或 'cphmd'
+        fixed — 根据 pH 将 HIS 重命名为 HIE/HIP，GROMACS 自动识别
+        cphmd — 使用 λ-dynamics CpHMD（原有模式）
     """
     variant_name = pdb_path.stem
     pdb_path = pdb_path.resolve()
@@ -61,30 +71,39 @@ def run_single(
 
     for ph in ph_values:
         work_dir = output_dir / variant_name / f"pH_{ph}"
-        logger.info("Running MD for %s at pH %.1f", variant_name, ph)
+        logger.info("Running MD for %s at pH %.1f (protonation=%s)", variant_name, ph, protonation)
 
-        # CpHMD 设置
-        cphmd_cfg = cfg["md"].get("cphmd", {})
-        if cphmd_cfg.get("enabled", False):
-            his_list = detect_his_residues(pdb_path)
-            titratable = filter_titratable(
-                his_list, cphmd_cfg.get("titratable_residues", [])
-            )
-            groups = build_cphmd_groups(
-                titratable,
-                barrier_height=cphmd_cfg["lambda_dynamics"]["barrier_height"],
-            )
-            logger.info(
-                "CpHMD: %d titratable His at pH %.1f", len(titratable), ph
-            )
-            # 将 groups 注入 config 的副本
-            cfg_copy = copy.deepcopy(cfg)
-            cfg_copy["md"]["cphmd"]["_runtime_groups"] = groups
-            wrapper = GromacsWrapper(cfg_copy, work_dir)
-        else:
+        if protonation == "fixed":
+            # 固定质子态：预处理 PDB（HIS → HIE/HIP）
+            prepped_pdb = work_dir / f"{variant_name}_pH{ph}.pdb"
+            prepare_fixed_protonation(pdb_path, ph, prepped_pdb)
             wrapper = GromacsWrapper(cfg, work_dir)
+            wrapper.run_full_pipeline(prepped_pdb, ph=ph)
 
-        wrapper.run_full_pipeline(pdb_path, ph=ph)
+        elif protonation == "cphmd":
+            # CpHMD 模式（原有逻辑）
+            cphmd_cfg = cfg["md"].get("cphmd", {})
+            if cphmd_cfg.get("enabled", False):
+                his_list = detect_his_residues(pdb_path)
+                titratable = filter_titratable(
+                    his_list, cphmd_cfg.get("titratable_residues", [])
+                )
+                groups = build_cphmd_groups(
+                    titratable,
+                    barrier_height=cphmd_cfg["lambda_dynamics"]["barrier_height"],
+                )
+                logger.info(
+                    "CpHMD: %d titratable His at pH %.1f", len(titratable), ph
+                )
+                cfg_copy = copy.deepcopy(cfg)
+                cfg_copy["md"]["cphmd"]["_runtime_groups"] = groups
+                wrapper = GromacsWrapper(cfg_copy, work_dir)
+            else:
+                wrapper = GromacsWrapper(cfg, work_dir)
+            wrapper.run_full_pipeline(pdb_path, ph=ph)
+
+        else:
+            raise ValueError(f"Unknown protonation mode: {protonation}")
 
 
 def main():
@@ -103,6 +122,10 @@ def main():
     parser.add_argument(
         "--config", type=Path, default=None,
         help="配置文件路径（默认 configs/md_config.yaml）"
+    )
+    parser.add_argument(
+        "--protonation", choices=["fixed", "cphmd"], default="fixed",
+        help="His 质子化模式: fixed=按 pH 重命名 HIS→HIE/HIP; cphmd=λ-dynamics（默认 fixed）"
     )
     args = parser.parse_args()
 
@@ -126,7 +149,7 @@ def main():
         logger.info("Found %d PDB files in %s", len(pdb_files), args.pdb_dir)
 
     for pdb in pdb_files:
-        run_single(pdb, args.ph, cfg, output_dir)
+        run_single(pdb, args.ph, cfg, output_dir, protonation=args.protonation)
 
     logger.info("All MD simulations complete. Output: %s", output_dir)
 

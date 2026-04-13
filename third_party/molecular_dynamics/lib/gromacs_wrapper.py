@@ -154,7 +154,7 @@ class GromacsWrapper:
         return out_gro
 
     def minimization(self, gro_path: Path) -> Path:
-        """能量最小化。"""
+        """能量最小化（CPU only，不需要 GPU）。"""
         mdp = self._render_minimization_mdp()
         tpr = self.work_dir / "em.tpr"
         self._run([
@@ -171,7 +171,6 @@ class GromacsWrapper:
             "-v", "-deffnm", "em",
             "-ntomp", str(self.md["gpu"]["ntomp"]),
             "-ntmpi", str(self.md["gpu"]["ntmpi"]),
-            "-gpu_id", str(self.md["gpu"]["device_id"]),
         ])
         return self.work_dir / "em.gro"
 
@@ -199,7 +198,6 @@ class GromacsWrapper:
             "mdrun", "-v", "-deffnm", "NVT",
             "-ntomp", str(self.md["gpu"]["ntomp"]),
             "-ntmpi", str(self.md["gpu"]["ntmpi"]),
-            "-gpu_id", str(self.md["gpu"]["device_id"]),
         ])
         return self.work_dir / "NVT.gro"
 
@@ -227,7 +225,6 @@ class GromacsWrapper:
             "mdrun", "-v", "-deffnm", "NPT",
             "-ntomp", str(self.md["gpu"]["ntomp"]),
             "-ntmpi", str(self.md["gpu"]["ntmpi"]),
-            "-gpu_id", str(self.md["gpu"]["device_id"]),
         ])
         return self.work_dir / "NPT.gro"
 
@@ -289,7 +286,6 @@ class GromacsWrapper:
             "-deffnm", "production",
             "-ntomp", str(self.md["gpu"]["ntomp"]),
             "-ntmpi", str(self.md["gpu"]["ntmpi"]),
-            "-gpu_id", str(self.md["gpu"]["device_id"]),
         ])
         return tpr
 

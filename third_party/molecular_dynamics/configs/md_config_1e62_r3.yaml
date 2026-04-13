@@ -1,0 +1,66 @@
+# 1E62 R3 MD 配置 (gpu5 用)
+
+md:
+  gmx_executable: "/public/apps/gromacs/2024.2/bin/gmx"
+  force_field: "amber99sb-ildn"
+  water_model: "tip3p"
+  box_type: "dodecahedron"
+  box_distance: 1.0
+  ion_concentration: 0.15
+  temperature: 310
+  max_warnings: 2
+
+  stages:
+    minimization:
+      max_steps: 5000
+      emtol: 1000.0
+    nvt:
+      duration_ps: 200
+      dt_ps: 0.001
+    npt:
+      duration_ps: 1000
+      dt_ps: 0.001
+    production:
+      duration_ns: 50
+      dt_ps: 0.002
+      save_interval_ps: 100
+
+  cphmd:
+    enabled: false
+
+  gpu:
+    device_id: 0
+    ntmpi: 1
+    ntomp: 6
+
+  output_dir: "experiments/1E62/R3/md"
+
+analysis:
+  antibody_chains: ["A", "B"]
+  antigen_chains: ["C"]
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 102 }
+    L1: { chain: "B", start: 24, end: 34 }
+    L2: { chain: "B", start: 50, end: 56 }
+    L3: { chain: "B", start: 89, end: 97 }
+
+  convergence:
+    window_ns: 5.0
+    variance_threshold: 0.05
+
+  contact_distance: 4.5
+
+  pairwise_dist:
+    pairs:
+      # L链 His 簇 → 最近抗原残基 (待确定具体 resid)
+      - { chain1: "B", resid1: 42, chain2: "C", resid2: 122, label: "His42-LYS122" }
+      - { chain1: "B", resid1: 43, chain2: "C", resid2: 122, label: "His43-LYS122" }
+      - { chain1: "B", resid1: 44, chain2: "C", resid2: 122, label: "His44-LYS122" }
+      # 已知关键盐桥
+      - { chain1: "C", resid1: 122, chain2: "A", resid2: 103, label: "LYS122-ASP103" }
+
+  mmpbsa:
+    enabled: false

@@ -6,6 +6,7 @@ from .hbond import HBondAnalyzer
 from .sasa import SASAAnalyzer
 from .contacts import ContactsAnalyzer
 from .mmpbsa import MMPBSAAnalyzer
+from .pairwise_dist import PairwiseDistAnalyzer
 
 ANALYZERS = {
     "rmsd": RMSDAnalyzer,
@@ -14,4 +15,5 @@ ANALYZERS = {
     "sasa": SASAAnalyzer,
     "contacts": ContactsAnalyzer,
     "mmpbsa": MMPBSAAnalyzer,
+    "pairwise_dist": PairwiseDistAnalyzer,
 }
