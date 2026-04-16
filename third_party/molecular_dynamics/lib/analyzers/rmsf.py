@@ -15,18 +15,11 @@ from .base import BaseAnalyzer, detect_convergence
 logger = logging.getLogger(__name__)
 
 
-def _select_chain(universe: mda.Universe, chain: str, extra: str = "") -> mda.AtomGroup:
-    """Try segid first, fall back to chainID."""
-    sel = f"name CA and segid {chain}"
-    if extra:
-        sel += f" and {extra}"
-    atoms = universe.select_atoms(sel)
-    if len(atoms) == 0:
-        sel = f"name CA and chainID {chain}"
-        if extra:
-            sel += f" and {extra}"
-        atoms = universe.select_atoms(sel)
-    return atoms
+def _normalize_chain(segid: str) -> str:
+    """将 GROMACS segid (如 seg_0_Protein_chain_A) 归一化为简单链名 (A)。"""
+    if "_chain_" in segid:
+        return segid.rsplit("_chain_", 1)[-1]
+    return segid
 
 
 class RMSFAnalyzer(BaseAnalyzer):
@@ -76,8 +69,8 @@ class RMSFAnalyzer(BaseAnalyzer):
         resids = []
         resnames = []
         for atom in ca:
-            chain = atom.segid if atom.segid.strip() else atom.chainID
-            chains.append(chain)
+            raw = atom.segid if atom.segid.strip() else atom.chainID
+            chains.append(_normalize_chain(raw))
             resids.append(atom.resid)
             resnames.append(atom.resname)
 

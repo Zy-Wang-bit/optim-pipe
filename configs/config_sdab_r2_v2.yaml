@@ -1,0 +1,104 @@
+## sdab R2 v2: per-seed fixed His + MPNN 全链设计
+## 142 seeds × 100 seq/seed ≈ 14k sequences
+
+paths:
+  foldx_bin: "third_party/foldx/foldx"
+  pdb_dir: "experiments/sdab/R2/data/pdb"
+  wt_dir: "experiments/sdab/R2/data"
+  wt_files:
+    A: "sdab.fasta"
+    B: "antigen.fasta"
+  mpnn_out_dir: "workspace/sdab_r2_v2/mpnn_outputs"
+  his_seed_dir: "workspace/sdab_r2_v2/his_seeds"
+  esm_out_dir: "workspace/sdab_r2_v2/esm_scores"
+  foldx_dir: "workspace/sdab_r2_v2/foldx"
+  results_dir: "workspace/sdab_r2_v2/results"
+  mpnn_runner: "third_party/ProteinMPNN/protein_mpnn_run.py"
+
+design:
+  chain: "A"
+  region: [1, 122]
+  max_len: 130
+
+interface:
+  ab_chains: ["A"]
+  ag_chains: ["B"]
+  cutoff: 5.0
+
+screening:
+  keep_top_pct_per_pdb: 0.5
+  min_len: 115
+  max_len: 130
+
+esm:
+  device: "cuda"
+  batch_size: 128
+
+foldx:
+  ph_points: [7.4, 6.0]
+  number_of_runs: 1
+  analyse_groups: "A;B"
+
+resources:
+  foldx_chunk_size: 40
+  foldx_max_procs: 128
+  omp_threads: 1
+
+tier1:
+  enabled: true
+  output: "workspace/sdab_r2_v2/results/tier1_candidates.csv"
+  adaptive:
+    target_range: [150, 300]
+    start:      { dG74_max: -2.0, delta_min: 0.3 }
+    relax_step: { dG74_max:  0.5, delta_min: -0.15 }
+    floors:     { dG74_max:  1.0, delta_min: 0.0 }
+  esm:
+    flag_below_percentile: 5
+
+tier2:
+  enabled: true
+  paths:
+    wt_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    wt_ab_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    template_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    tier2_dir: "workspace/sdab_r2_v2/tier2"
+  chains:
+    binder: ["A"]
+    target: ["B"]
+    heavy: "A"
+    light: null
+  pka:
+    tools: ["propka", "pkai+"]
+    his_positions: []
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 112 }
+  filter:
+    pka_relative: true
+    pka_top_n: 300
+    cdr_rmsd_max: 0.8
+    cdr_rmsd_metric: "h2_rmsd"
+    output: "workspace/sdab_r2_v2/results/tier2_candidates.csv"
+
+  input:
+    csv: "workspace/sdab_r2_v2/results/tier1_candidates.csv"
+    mutations_column: "mutations"
+    mutations_format: "foldx"
+
+  rosetta:
+    repack_shell: 8.0
+    minimize: true
+    scorefxn: "ref2015"
+
+  simplefold:
+    model: "simplefold_3B"
+    num_steps: 500
+    nsample_per_protein: 3
+    tau: 0.01
+    outlier_global_rmsd: 5.0
+
+tier3:
+  rank_by: "dddG_elec"
+  rank_ascending: true
+  output: "workspace/sdab_r2_v2/results/final_candidates.csv"

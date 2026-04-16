@@ -1,0 +1,71 @@
+# sdab R3: CDR-His + FR-His 配对设计 MD 配置
+# gpu5 用: gmx_executable 指定绝对路径
+
+md:
+  gmx_executable: "/public/apps/gromacs/2024.2/bin/gmx"
+  force_field: "amber99sb-ildn"
+  water_model: "tip3p"
+  box_type: "dodecahedron"
+  box_distance: 1.0
+  ion_concentration: 0.15
+  temperature: 310
+  max_warnings: 2
+
+  stages:
+    minimization:
+      max_steps: 5000
+      emtol: 1000.0
+    nvt:
+      duration_ps: 200
+      dt_ps: 0.001
+    npt:
+      duration_ps: 1000
+      dt_ps: 0.001
+    production:
+      duration_ns: 50
+      dt_ps: 0.002
+      save_interval_ps: 100
+
+  cphmd:
+    enabled: false
+
+  gpu:
+    device_id: 0
+    ntmpi: 1
+    ntomp: 6
+
+  output_dir: "experiments/sdab/R3/md"
+
+analysis:
+  antibody_chains: ["A"]
+  antigen_chains: ["B"]
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 102 }
+
+  convergence:
+    window_ns: 5.0
+    variance_threshold: 0.05
+
+  contact_distance: 4.5
+
+  pairwise_dist:
+    # GROMACS 连续编号: A链 resid 1-122, B链(抗原) resid 123-348
+    pairs:
+      # CDR-His → 抗原接触
+      - { chain1: "A", resid1: 61, chain2: "B", resid2: 240, label: "His61-THR240" }
+      - { chain1: "A", resid1: 99, chain2: "B", resid2: 245, label: "His99-THR245" }
+      - { chain1: "A", resid1: 110, chain2: "B", resid2: 244, label: "His110-LYS244" }
+      # FR-His → CDR-His 排斥监测 (R3 新增)
+      - { chain1: "A", resid1: 72, chain2: "A", resid2: 51, label: "FR_R72H-CDR_I51H" }
+      - { chain1: "A", resid1: 72, chain2: "A", resid2: 52, label: "FR_R72H-CDR_N52H" }
+      - { chain1: "A", resid1: 74, chain2: "A", resid2: 29, label: "FR_N74H-CDR_F29H" }
+      - { chain1: "A", resid1: 77, chain2: "A", resid2: 29, label: "FR_N77H-CDR_F29H" }
+      - { chain1: "A", resid1: 70, chain2: "A", resid2: 51, label: "FR_I70H-CDR_I51H" }
+      - { chain1: "A", resid1: 94, chain2: "A", resid2: 95, label: "FR_Y94H-CDR3_Y95" }
+      - { chain1: "A", resid1: 93, chain2: "A", resid2: 95, label: "FR_V93H-CDR3_Y95" }
+
+  mmpbsa:
+    enabled: false

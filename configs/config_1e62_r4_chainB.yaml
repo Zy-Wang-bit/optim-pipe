@@ -1,0 +1,168 @@
+paths:
+  foldx_bin: "third_party/foldx/foldx"
+  pdb_dir: "experiments/1E62/R4/data/pdb_single"  # 仅 AF3-1E62-AeS-1
+  wt_dir: "experiments/1E62/R4/data"
+  wt_files:
+    A: "heavy.fasta"
+    B: "light.fasta"
+    C: "antigen.fasta"
+  mpnn_out_dir: "workspace/1e62_r4_chainB/mpnn_outputs"
+  his_seed_dir: "workspace/1e62_r4_chainB/his_seeds"
+  esm_out_dir: "workspace/1e62_r4_chainB/esm_scores"
+  foldx_dir: "workspace/1e62_r4_chainB/foldx"
+  results_dir: "workspace/1e62_r4_chainB/results"
+  mpnn_runner: "third_party/ProteinMPNN/protein_mpnn_run.py"
+
+design:
+  chain: "B"              # L-chain
+  region: [1, 113]        # 全 L-chain
+  max_len: 120
+
+interface:
+  ab_chains: ["A", "B"]
+  ag_chains: ["C"]
+  cutoff: 5.0
+
+his_bias:
+  enable: true
+  min_his_in_region: 1
+  target_positions: []    # 自动扫描
+  prefer_sites_topk: 30
+  single_scan_aminoacids: ["H"]
+  pair_scan_limit: 435
+  triple_scan_limit: 200
+
+screening:
+  keep_top_pct_per_pdb: 0.8
+  min_len: 105
+  max_len: 125
+
+esm:
+  device: "cuda"
+  batch_size: 128
+
+foldx:
+  ph_points: [7.4, 6.0]
+  number_of_runs: 1
+  analyse_groups: "A,B;C"
+
+resources:
+  mpnn_chunk_size: 50000
+  esm_chunk_size: 50000
+  foldx_chunk_size: 200
+  foldx_max_procs: 128
+  omp_threads: 1
+  checkpoint_every: 2000
+
+selection:
+  mode: adaptive
+  target_n: 10000
+  start:        { dG74_max: -3.0,  delta_min: 1.0 }
+  relax_step:   { dG74_max:  0.5,  delta_min: -0.25 }
+  floors:       { dG74_max:  1.0,  delta_min: 0.0 }
+  per_pdb_max_frac: 1.0
+  his_min_frac: 0.20
+  his_bonus: 0.2
+  alpha: 0.3
+  beta: 0.1
+  delta_delta_weight: 0.0
+
+tier1:
+  enabled: true
+  output: "workspace/1e62_r4_chainB/results/tier1_candidates.csv"
+  adaptive:
+    target_range: [200, 400]
+    start:      { dG74_max: -3.0, delta_min: 0.3 }
+    relax_step: { dG74_max:  0.5, delta_min: -0.15 }
+    floors:     { dG74_max:  0.3, delta_min: 0.0 }
+  esm:
+    flag_below_percentile: 5
+
+tier2:
+  enabled: true
+
+  paths:
+    wt_pdb: "experiments/1E62/R4/data/pdb/ab_wt.pdb"
+    wt_ab_pdb: "experiments/1E62/R4/data/pdb/ab_wt.pdb"
+    template_pdb: "experiments/1E62/R4/data/pdb/AF3-1E62-AeS-1.pdb"
+    tier2_dir: "workspace/1e62_r4_chainB/tier2"
+
+  input:
+    csv: "workspace/1e62_r4_chainB/results/tier1_candidates.csv"
+    mutations_column: "mutations"
+    mutations_format: "foldx"
+
+  chains:
+    binder: ["A", "B"]
+    target: ["C"]
+    heavy: "A"
+    light: "B"
+
+  rosetta:
+    repack_shell: 8.0
+    minimize: true
+    scorefxn: "ref2015"
+
+  simplefold:
+    model: "simplefold_3B"
+    num_steps: 500
+    nsample_per_protein: 3
+    tau: 0.01
+    outlier_global_rmsd: 2.0
+
+  pka:
+    tools: ["propka", "pkai+"]
+    his_positions:
+      # L-chain CDR1
+      - { chain: "B", resid: 24 }
+      - { chain: "B", resid: 26 }
+      - { chain: "B", resid: 27 }
+      - { chain: "B", resid: 28 }
+      - { chain: "B", resid: 29 }
+      - { chain: "B", resid: 30 }
+      - { chain: "B", resid: 31 }
+      - { chain: "B", resid: 32 }
+      - { chain: "B", resid: 33 }
+      - { chain: "B", resid: 34 }
+      # L-chain FR2/CDR 交界 (com18 核心区域)
+      - { chain: "B", resid: 38 }
+      - { chain: "B", resid: 42 }
+      - { chain: "B", resid: 43 }
+      - { chain: "B", resid: 44 }
+      # L-chain CDR2
+      - { chain: "B", resid: 50 }
+      - { chain: "B", resid: 51 }
+      - { chain: "B", resid: 52 }
+      - { chain: "B", resid: 53 }
+      - { chain: "B", resid: 56 }
+      # L-chain CDR3
+      - { chain: "B", resid: 89 }
+      - { chain: "B", resid: 90 }
+      - { chain: "B", resid: 91 }
+      - { chain: "B", resid: 93 }
+      - { chain: "B", resid: 96 }
+      - { chain: "B", resid: 97 }
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 102 }
+    L1: { chain: "B", start: 24, end: 34 }
+    L2: { chain: "B", start: 50, end: 56 }
+    L3: { chain: "B", start: 89, end: 97 }
+
+  filter:
+    pka_relative: true
+    pka_top_n: 100
+    cdr_rmsd_max: 0.5
+    cdr_rmsd_metric: "l1_rmsd"
+    output: "workspace/1e62_r4_chainB/results/tier2_candidates.csv"
+
+tier3:
+  rank_by: "dddG_elec"
+  rank_ascending: false
+  soft_flags:
+    esm_flag: true
+    phscore_flag: true
+    consensus_flag: true
+  output: "workspace/1e62_r4_chainB/results/final_candidates.csv"

@@ -101,10 +101,42 @@ class PairwiseDistAnalyzer(BaseAnalyzer):
 
     @staticmethod
     def _select_residue_heavy(u: mda.Universe, chain: str, resid: int) -> mda.AtomGroup:
-        """选择指定链和残基号的重原子。先尝试 segid，再尝试 chainID。"""
-        for kw in ("segid", "chainID"):
-            sel = f"not name H* and {kw} {chain} and resid {resid}"
-            grp = u.select_atoms(sel)
-            if len(grp) > 0:
-                return grp
+        """选择指定链和残基号的重原子。
+
+        GROMACS 使用连续残基编号，config 中 resid 应为 GROMACS 编号。
+        chain 用于验证选择（确保链归属正确），不作为唯一选择条件。
+
+        依次尝试：
+        1. segid 精确匹配 (如 segid A)
+        2. GROMACS 格式 segid 匹配 (如 seg_N_Protein_chain_A)
+        3. chainID 匹配
+        4. 仅 resid（GROMACS 连续编号无歧义时）
+        """
+        # 1. 精确 segid
+        sel = f"not name H* and segid {chain} and resid {resid}"
+        grp = u.select_atoms(sel)
+        if len(grp) > 0:
+            return grp
+
+        # 2. GROMACS segid 格式: seg_N_Protein_chain_X
+        for seg in u.segments:
+            if seg.segid.endswith(f"_chain_{chain}") or seg.segid.endswith(f"chain_{chain}"):
+                sel = f"not name H* and segid {seg.segid} and resid {resid}"
+                grp = u.select_atoms(sel)
+                if len(grp) > 0:
+                    return grp
+
+        # 3. chainID
+        sel = f"not name H* and chainID {chain} and resid {resid}"
+        grp = u.select_atoms(sel)
+        if len(grp) > 0:
+            return grp
+
+        # 4. resid only — 仅适用于 GROMACS 连续编号（resid 全局唯一）
+        sel = f"not name H* and resid {resid}"
+        grp = u.select_atoms(sel)
+        if len(grp) > 0:
+            logger.warning("Pair resid %d: chain '%s' not matched, using resid-only selection", resid, chain)
+            return grp
+
         return mda.AtomGroup([], u)

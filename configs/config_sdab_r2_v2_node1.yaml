@@ -1,0 +1,25 @@
+# sdab R2 v2 - FoldX node 1 (batch 64-127)
+paths:
+  foldx_bin: "third_party/foldx/foldx"
+  pdb_dir: "experiments/sdab/R2/data/pdb"
+  wt_dir: "experiments/sdab/R2/data"
+  wt_files:
+    A: "sdab.fasta"
+    B: "antigen.fasta"
+  foldx_dir: "workspace/sdab_r2_v2/foldx"
+  results_dir: "workspace/sdab_r2_v2/results"
+design:
+  chain: "A"
+  region: [1, 122]
+interface:
+  ab_chains: ["A"]
+  ag_chains: ["B"]
+foldx:
+  ph_points: [7.4, 6.0]
+  number_of_runs: 1
+  analyse_groups: "A;B"
+foldx_batch_range: [64, 127]
+resources:
+  foldx_chunk_size: 40
+  foldx_max_procs: 128
+  omp_threads: 1

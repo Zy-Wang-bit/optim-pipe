@@ -12,7 +12,7 @@ import MDAnalysis as mda
 import numpy as np
 import pandas as pd
 
-from .base import BaseAnalyzer
+from .base import BaseAnalyzer, select_chains
 
 logger = logging.getLogger(__name__)
 
@@ -22,19 +22,6 @@ try:
     _HAS_FREESASA = True
 except ImportError:
     _HAS_FREESASA = False
-
-
-def _chain_selection(chains: list[str], keyword: str = "segid") -> str:
-    parts = [f"{keyword} {c}" for c in chains]
-    return "(" + " or ".join(parts) + ")"
-
-
-def _select_group(u: mda.Universe, chains: list[str]) -> mda.AtomGroup:
-    """Select atoms for chain list, trying segid then chainID."""
-    grp = u.select_atoms(_chain_selection(chains, "segid"))
-    if len(grp) == 0:
-        grp = u.select_atoms(_chain_selection(chains, "chainID"))
-    return grp
 
 
 def _compute_sasa_freesasa(atom_group: mda.AtomGroup) -> float:
@@ -71,8 +58,8 @@ class SASAAnalyzer(BaseAnalyzer):
         ab_chains = self.analysis_cfg["antibody_chains"]
         ag_chains = self.analysis_cfg["antigen_chains"]
 
-        ab = _select_group(u, ab_chains)
-        ag = _select_group(u, ag_chains)
+        ab = select_chains(u, ab_chains)
+        ag = select_chains(u, ag_chains)
         complex_group = ab | ag
 
         if len(ab) == 0 or len(ag) == 0:

@@ -10,7 +10,7 @@ from MDAnalysis.analysis.rms import RMSD as MDA_RMSD
 import numpy as np
 import pandas as pd
 
-from .base import BaseAnalyzer, detect_convergence
+from .base import BaseAnalyzer, detect_convergence, resolve_chain_segids, select_chains
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +30,7 @@ class RMSDAnalyzer(BaseAnalyzer):
         ab_chains = self.analysis_cfg.get("antibody_chains", [])
         ca = None
         if ab_chains:
-            for sel_type in ("segid", "chainID"):
-                chain_sel = " or ".join(
-                    f"{sel_type} {c}" for c in ab_chains
-                )
-                trial = u.select_atoms(f"name CA and ({chain_sel})")
-                if len(trial) > 0:
-                    ca = trial
-                    break
-            # segid 可能是 GROMACS 格式 "seg_0_Protein_chain_X"
-            if ca is None or len(ca) == 0:
-                seg_sel = " or ".join(
-                    f"segid *chain_{c}*" for c in ab_chains
-                )
-                ca = u.select_atoms(f"name CA and ({seg_sel})")
+            ca = select_chains(u, ab_chains, "name CA")
         if ca is None or len(ca) == 0:
             ca = u.select_atoms("name CA")
             logger.warning("Could not select antibody chains, using all CA (%d atoms)", len(ca))
@@ -61,18 +48,9 @@ class RMSDAnalyzer(BaseAnalyzer):
         cdr_rmsds = {}
         cdr_regions = self.analysis_cfg["cdr_regions"]
         for cdr_name, cdr_def in cdr_regions.items():
-            sel = (
-                f"name CA and segid {cdr_def['chain']} "
-                f"and resid {cdr_def['start']}:{cdr_def['end']}"
-            )
-            cdr_atoms = u.select_atoms(sel)
-            if len(cdr_atoms) == 0:
-                # 回退到 chainID 选择
-                sel = (
-                    f"name CA and chainID {cdr_def['chain']} "
-                    f"and resid {cdr_def['start']}:{cdr_def['end']}"
-                )
-                cdr_atoms = u.select_atoms(sel)
+            chain = cdr_def["chain"]
+            resid_range = f"resid {cdr_def['start']}:{cdr_def['end']}"
+            cdr_atoms = select_chains(u, [chain], f"name CA and {resid_range}")
 
             if len(cdr_atoms) == 0:
                 logger.warning("CDR %s: no atoms found, skipping", cdr_name)

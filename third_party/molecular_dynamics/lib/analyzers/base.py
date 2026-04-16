@@ -12,6 +12,59 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+def resolve_chain_segids(u, chains: list[str]) -> list[str]:
+    """将用户配置的链名 (如 "A", "B") 解析为实际 segid。
+
+    GROMACS 输出的 segid 通常是 "seg_0_Protein_chain_A" 而非简单的 "A"。
+    本函数依次尝试：精确匹配 → GROMACS 格式匹配 → 返回原始值。
+    """
+    resolved = []
+    all_segids = [seg.segid for seg in u.segments]
+    for c in chains:
+        # 精确匹配
+        if c in all_segids:
+            resolved.append(c)
+            continue
+        # GROMACS 格式: seg_N_Protein_chain_X
+        matches = [s for s in all_segids if s.endswith(f"_chain_{c}")]
+        if matches:
+            resolved.extend(matches)
+            continue
+        # 回退：保留原始值
+        resolved.append(c)
+    return resolved
+
+
+def select_chains(u, chains: list[str], extra_sel: str = "") -> "mda.AtomGroup":
+    """按链名选择原子，自动处理 GROMACS segid 格式。
+
+    Parameters
+    ----------
+    u : MDAnalysis Universe
+    chains : 链名列表，如 ["A", "B"]
+    extra_sel : 额外的选择字符串，如 "not name H*" 或 "name CA"
+    """
+    import MDAnalysis as mda
+
+    # 先尝试 segid (解析后)
+    segids = resolve_chain_segids(u, chains)
+    parts = " or ".join(f"segid {s}" for s in segids)
+    sel = f"({parts})"
+    if extra_sel:
+        sel = f"{extra_sel} and {sel}"
+    grp = u.select_atoms(sel)
+    if len(grp) > 0:
+        return grp
+
+    # 回退到 chainID
+    parts = " or ".join(f"chainID {c}" for c in chains)
+    sel = f"({parts})"
+    if extra_sel:
+        sel = f"{extra_sel} and {sel}"
+    grp = u.select_atoms(sel)
+    return grp
+
+
 class BaseAnalyzer(ABC):
     """轨迹分析器基类。
 

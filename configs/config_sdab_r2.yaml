@@ -1,0 +1,167 @@
+paths:
+  foldx_bin: "third_party/foldx/foldx"
+  pdb_dir: "experiments/sdab/R2/data/pdb"
+  wt_dir: "experiments/sdab/R2/data"
+  wt_files:
+    A: "sdab.fasta"
+    B: "antigen.fasta"
+  mpnn_out_dir: "workspace/sdab_r2/mpnn_outputs"
+  his_seed_dir: "workspace/sdab_r2/his_seeds"
+  esm_out_dir: "workspace/sdab_r2/esm_scores"
+  foldx_dir: "workspace/sdab_r2/foldx"
+  results_dir: "workspace/sdab_r2/results"
+  mpnn_runner: "third_party/ProteinMPNN/protein_mpnn_run.py"
+
+design:
+  chain: "A"              # sdab 单域抗体
+  region: [1, 122]        # 全链（122 残基）
+  max_len: 130            # 放开限制
+
+interface:
+  ab_chains: ["A"]        # 单域，无轻链
+  ag_chains: ["B"]        # PDB 中抗原为 chain B
+  cutoff: 5.0
+
+his_bias:
+  enable: true
+  min_his_in_region: 2    # 组合设计，至少 2 个 His
+  target_positions:        # 基于 31 变体实验数据手动指定
+    - "A:27"   # R27H CDR1, ratio 1.45
+    - "A:28"   # T28H CDR1, ratio 1.23
+    - "A:29"   # F29H CDR1, ratio 1.52
+    - "A:30"   # S30H CDR1, ratio 1.99
+    - "A:31"   # S31H CDR1, ratio 1.46
+    - "A:51"   # I51H CDR2, ratio 4.27
+    - "A:52"   # N52H CDR2, ratio 7.37
+    - "A:53"   # G53H CDR2, ratio 1.30
+    - "A:55"   # G55H CDR2, ratio 3.24
+    - "A:56"   # G56H CDR2, ratio 1.31
+    - "A:105"  # V105H CDR3, ratio 4.99
+    - "A:108"  # E108H CDR3, ratio 1.75
+    - "A:109"  # G109H CDR3, ratio 1.71
+    - "A:110"  # D110H CDR3, ratio 2.70
+  prefer_sites_topk: 14
+  single_scan_aminoacids: ["H"]
+  pair_scan_limit: 91       # C(14,2)
+  triple_scan_limit: 300
+  quad_scan_limit: 200
+
+screening:
+  keep_top_pct_per_pdb: 0.5
+  min_len: 115
+  max_len: 130
+
+esm:
+  device: "cuda"
+  batch_size: 128
+
+foldx:
+  ph_points: [7.4, 6.0]
+  number_of_runs: 1
+  analyse_groups: "A;B"     # sdab vs antigen
+
+resources:
+  mpnn_chunk_size: 50000
+  esm_chunk_size: 50000
+  foldx_chunk_size: 800
+  foldx_max_procs: 24
+  omp_threads: 1
+  checkpoint_every: 2000
+
+selection:
+  mode: adaptive
+  target_n: 10000
+  start:        { dG74_max: -2.0,  delta_min: 0.3 }
+  relax_step:   { dG74_max:  0.5,  delta_min: -0.15 }
+  floors:       { dG74_max:  1.0,  delta_min: 0.0 }
+  per_pdb_max_frac: 1.0    # 单 PDB，不限制
+  his_min_frac: 0.50       # His 候选保底占比更高
+  his_bonus: 0.2
+  alpha: 0.3
+  beta: 0.1
+  delta_delta_weight: 0.0
+
+# ── Tier 1 ──────────────────────────────────────────────────────────────────
+tier1:
+  enabled: true
+  output: "workspace/sdab_r2/results/tier1_candidates.csv"
+  adaptive:
+    target_range: [150, 300]
+    start:      { dG74_max: -2.0, delta_min: 0.3 }
+    relax_step: { dG74_max:  0.5, delta_min: -0.15 }
+    floors:     { dG74_max:  1.0, delta_min: 0.0 }
+  esm:
+    flag_below_percentile: 5
+
+# ── Tier 2 ──────────────────────────────────────────────────────────────────
+tier2:
+  enabled: true
+
+  paths:
+    wt_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    wt_ab_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    template_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    tier2_dir: "workspace/sdab_r2/tier2"
+
+  input:
+    csv: "workspace/sdab_r2/results/tier1_candidates.csv"
+    mutations_column: "mutations"
+    mutations_format: "foldx"
+
+  chains:
+    binder: ["A"]
+    target: ["B"]
+    heavy: "A"
+    light: null             # 单域抗体，无轻链
+
+  rosetta:
+    repack_shell: 8.0
+    minimize: true
+    scorefxn: "ref2015"
+
+  simplefold:
+    model: "simplefold_3B"
+    num_steps: 500
+    nsample_per_protein: 3
+    tau: 0.01
+    outlier_global_rmsd: 2.0
+
+  pka:
+    tools: ["propka", "pkai+"]
+    his_positions:
+      - { chain: "A", resid: 27 }
+      - { chain: "A", resid: 28 }
+      - { chain: "A", resid: 29 }
+      - { chain: "A", resid: 30 }
+      - { chain: "A", resid: 31 }
+      - { chain: "A", resid: 51 }
+      - { chain: "A", resid: 52 }
+      - { chain: "A", resid: 53 }
+      - { chain: "A", resid: 55 }
+      - { chain: "A", resid: 56 }
+      - { chain: "A", resid: 105 }
+      - { chain: "A", resid: 108 }
+      - { chain: "A", resid: 109 }
+      - { chain: "A", resid: 110 }
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 112 }
+
+  filter:
+    pka_relative: true
+    pka_top_n: 100
+    cdr_rmsd_max: 0.8       # 多 His 组合适当放宽
+    cdr_rmsd_metric: "h2_rmsd"
+    output: "workspace/sdab_r2/results/tier2_candidates.csv"
+
+# ── Tier 3 ──────────────────────────────────────────────────────────────────
+tier3:
+  rank_by: "dddG_elec"
+  rank_ascending: true      # sdab: 实验显示负相关，反转排序方向
+  soft_flags:
+    esm_flag: true
+    phscore_flag: true
+    consensus_flag: true
+  output: "workspace/sdab_r2/results/final_candidates.csv"

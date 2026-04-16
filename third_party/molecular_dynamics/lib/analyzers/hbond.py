@@ -10,15 +10,9 @@ from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 import numpy as np
 import pandas as pd
 
-from .base import BaseAnalyzer
+from .base import BaseAnalyzer, select_chains
 
 logger = logging.getLogger(__name__)
-
-
-def _chain_selection(chains: list[str], keyword: str = "segid") -> str:
-    """Build selection string for multiple chains."""
-    parts = [f"{keyword} {c}" for c in chains]
-    return "(" + " or ".join(parts) + ")"
 
 
 class HBondAnalyzer(BaseAnalyzer):
@@ -27,18 +21,11 @@ class HBondAnalyzer(BaseAnalyzer):
     name = "hbond"
 
     def _select_groups(self, u: mda.Universe):
-        """Select antibody and antigen atoms, trying segid then chainID."""
+        """Select antibody and antigen atoms."""
         ab_chains = self.analysis_cfg["antibody_chains"]
         ag_chains = self.analysis_cfg["antigen_chains"]
-
-        ab = u.select_atoms(_chain_selection(ab_chains, "segid"))
-        if len(ab) == 0:
-            ab = u.select_atoms(_chain_selection(ab_chains, "chainID"))
-
-        ag = u.select_atoms(_chain_selection(ag_chains, "segid"))
-        if len(ag) == 0:
-            ag = u.select_atoms(_chain_selection(ag_chains, "chainID"))
-
+        ab = select_chains(u, ab_chains)
+        ag = select_chains(u, ag_chains)
         return ab, ag
 
     def run(self) -> dict[str, Any]:

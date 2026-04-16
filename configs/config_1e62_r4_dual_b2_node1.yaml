@@ -1,0 +1,241 @@
+design:
+  chain:
+  - A
+  - B
+  max_len: 230
+  regions:
+    A:
+    - 1
+    - 115
+    B:
+    - 1
+    - 113
+esm:
+  batch_size: 64
+  device: cuda
+foldx:
+  analyse_groups: A,B;C
+  number_of_runs: 1
+  ph_points:
+  - 7.4
+  - 6.0
+foldx_batch_range:
+- 64
+- 127
+his_bias:
+  enable: true
+  min_his_in_region: 1
+  pair_scan_limit: 500
+  prefer_sites_topk: 15
+  quad_scan_limit: 0
+  single_scan_aminoacids:
+  - H
+  target_positions:
+  - A:31
+  - A:32
+  - A:33
+  - A:50
+  - A:51
+  - A:52
+  - A:28
+  - A:101
+  - A:102
+  - A:103
+  - B:26
+  - B:31
+  - B:35
+  - B:38
+  - B:42
+  - B:43
+  - B:44
+  - B:58
+  - B:96
+  - B:97
+  triple_scan_limit: 300
+interface:
+  ab_chains:
+  - A
+  - B
+  ag_chains:
+  - C
+  cutoff: 5.0
+paths:
+  esm_out_dir: workspace/1e62_r4_dual/esm_scores
+  foldx_bin: third_party/foldx/foldx
+  foldx_dir: workspace/1e62_r4_dual/foldx_b2
+  his_seed_dir: workspace/1e62_r4_dual/his_seeds
+  mpnn_out_dir: workspace/1e62_r4_dual/mpnn_outputs
+  mpnn_runner: third_party/ProteinMPNN/protein_mpnn_run.py
+  pdb_dir: experiments/1E62/R4/data/pdb_single
+  results_dir: workspace/1e62_r4_dual/results
+  wt_dir: experiments/1E62/R4/data
+  wt_files:
+    A: heavy.fasta
+    B: light.fasta
+    C: antigen.fasta
+resources:
+  checkpoint_every: 2000
+  esm_chunk_size: 50000
+  foldx_chunk_size: 235
+  foldx_max_procs: 128
+  mpnn_chunk_size: 50000
+  omp_threads: 1
+screening:
+  keep_top_pct_per_pdb: 0.5
+  max_len: 250
+  min_len: 200
+selection:
+  alpha: 0.3
+  beta: 0.1
+  delta_delta_weight: 0.0
+  floors:
+    dG74_max: 1.0
+    delta_min: 0.0
+  his_bonus: 0.2
+  his_min_frac: 0.2
+  mode: adaptive
+  per_pdb_max_frac: 1.0
+  relax_step:
+    dG74_max: 0.5
+    delta_min: -0.25
+  start:
+    dG74_max: -3.0
+    delta_min: 1.0
+  target_n: 10000
+tier1:
+  adaptive:
+    floors:
+      dG74_max: 0.3
+      delta_min: 0.0
+    relax_step:
+      dG74_max: 0.5
+      delta_min: -0.15
+    start:
+      dG74_max: -3.0
+      delta_min: 0.3
+    target_range:
+    - 200
+    - 400
+  enabled: true
+  esm:
+    flag_below_percentile: 5
+  output: workspace/1e62_r4_dual/results/tier1_candidates.csv
+tier2:
+  cdr_regions:
+    H1:
+      chain: A
+      end: 35
+      start: 26
+    H2:
+      chain: A
+      end: 65
+      start: 50
+    H3:
+      chain: A
+      end: 102
+      start: 95
+    L1:
+      chain: B
+      end: 34
+      start: 24
+    L2:
+      chain: B
+      end: 56
+      start: 50
+    L3:
+      chain: B
+      end: 97
+      start: 89
+  chains:
+    binder:
+    - A
+    - B
+    heavy: A
+    light: B
+    target:
+    - C
+  enabled: true
+  filter:
+    cdr_rmsd_max: 0.5
+    cdr_rmsd_metric: h1_rmsd
+    output: workspace/1e62_r4_dual/results/tier2_candidates.csv
+    pka_relative: true
+    pka_top_n: 100
+  input:
+    csv: workspace/1e62_r4_dual/results/tier1_candidates.csv
+    mutations_column: mutations
+    mutations_format: foldx
+  paths:
+    template_pdb: experiments/1E62/R4/data/pdb/AF3-1E62-AeS-1.pdb
+    tier2_dir: workspace/1e62_r4_dual/tier2
+    wt_ab_pdb: experiments/1E62/R4/data/pdb/ab_wt.pdb
+    wt_pdb: experiments/1E62/R4/data/pdb/ab_wt.pdb
+  pka:
+    his_positions:
+    - chain: A
+      resid: 27
+    - chain: A
+      resid: 28
+    - chain: A
+      resid: 31
+    - chain: A
+      resid: 32
+    - chain: A
+      resid: 33
+    - chain: A
+      resid: 50
+    - chain: A
+      resid: 52
+    - chain: A
+      resid: 53
+    - chain: A
+      resid: 56
+    - chain: A
+      resid: 101
+    - chain: A
+      resid: 102
+    - chain: A
+      resid: 103
+    - chain: B
+      resid: 26
+    - chain: B
+      resid: 28
+    - chain: B
+      resid: 31
+    - chain: B
+      resid: 38
+    - chain: B
+      resid: 42
+    - chain: B
+      resid: 43
+    - chain: B
+      resid: 44
+    - chain: B
+      resid: 51
+    - chain: B
+      resid: 58
+    - chain: B
+      resid: 96
+    - chain: B
+      resid: 97
+    tools:
+    - propka
+    - pkai+
+  rosetta:
+    minimize: true
+    repack_shell: 8.0
+    scorefxn: ref2015
+  simplefold:
+    model: simplefold_3B
+    nsample_per_protein: 3
+    num_steps: 500
+    outlier_global_rmsd: 2.0
+    tau: 0.01
+tier3:
+  output: workspace/1e62_r4_dual/results/final_candidates.csv
+  rank_ascending: false
+  rank_by: dddG_elec
+  soft_flags:
+    consensus_flag: true
+    esm_flag: true
+    phscore_flag: true

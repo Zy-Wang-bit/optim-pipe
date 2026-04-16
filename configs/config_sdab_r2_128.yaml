@@ -1,0 +1,193 @@
+design:
+  chain: A
+  max_len: 130
+  region:
+  - 1
+  - 122
+esm:
+  batch_size: 128
+  device: cuda
+foldx:
+  analyse_groups: A;B
+  number_of_runs: 1
+  ph_points:
+  - 7.4
+  - 6.0
+his_bias:
+  enable: true
+  min_his_in_region: 2
+  pair_scan_limit: 91
+  prefer_sites_topk: 14
+  quad_scan_limit: 200
+  single_scan_aminoacids:
+  - H
+  target_positions:
+  - A:27
+  - A:28
+  - A:29
+  - A:30
+  - A:31
+  - A:51
+  - A:52
+  - A:53
+  - A:55
+  - A:56
+  - A:105
+  - A:108
+  - A:109
+  - A:110
+  triple_scan_limit: 300
+interface:
+  ab_chains:
+  - A
+  ag_chains:
+  - B
+  cutoff: 5.0
+paths:
+  esm_out_dir: workspace/sdab_r2/esm_scores
+  foldx_bin: third_party/foldx/foldx
+  foldx_dir: workspace/sdab_r2/foldx
+  his_seed_dir: workspace/sdab_r2/his_seeds
+  mpnn_out_dir: workspace/sdab_r2/mpnn_outputs
+  mpnn_runner: third_party/ProteinMPNN/protein_mpnn_run.py
+  pdb_dir: experiments/sdab/R2/data/pdb
+  results_dir: workspace/sdab_r2/results
+  wt_dir: experiments/sdab/R2/data
+  wt_files:
+    A: sdab.fasta
+    B: antigen.fasta
+resources:
+  checkpoint_every: 2000
+  esm_chunk_size: 50000
+  foldx_chunk_size: 200
+  foldx_max_procs: 128
+  mpnn_chunk_size: 50000
+  omp_threads: 1
+screening:
+  keep_top_pct_per_pdb: 0.5
+  max_len: 130
+  min_len: 115
+selection:
+  alpha: 0.3
+  beta: 0.1
+  delta_delta_weight: 0.0
+  floors:
+    dG74_max: 1.0
+    delta_min: 0.0
+  his_bonus: 0.2
+  his_min_frac: 0.5
+  mode: adaptive
+  per_pdb_max_frac: 1.0
+  relax_step:
+    dG74_max: 0.5
+    delta_min: -0.15
+  start:
+    dG74_max: -2.0
+    delta_min: 0.3
+  target_n: 10000
+tier1:
+  adaptive:
+    floors:
+      dG74_max: 1.0
+      delta_min: 0.0
+    relax_step:
+      dG74_max: 0.5
+      delta_min: -0.15
+    start:
+      dG74_max: -2.0
+      delta_min: 0.3
+    target_range:
+    - 150
+    - 300
+  enabled: true
+  esm:
+    flag_below_percentile: 5
+  output: workspace/sdab_r2/results/tier1_candidates.csv
+tier2:
+  cdr_regions:
+    H1:
+      chain: A
+      end: 35
+      start: 26
+    H2:
+      chain: A
+      end: 65
+      start: 50
+    H3:
+      chain: A
+      end: 112
+      start: 95
+  chains:
+    binder:
+    - A
+    heavy: A
+    light: null
+    target:
+    - B
+  enabled: true
+  filter:
+    cdr_rmsd_max: 0.8
+    cdr_rmsd_metric: h2_rmsd
+    output: workspace/sdab_r2/results/tier2_candidates.csv
+    pka_relative: true
+    pka_top_n: 100
+  input:
+    csv: workspace/sdab_r2/results/tier1_candidates.csv
+    mutations_column: mutations
+    mutations_format: foldx
+  paths:
+    template_pdb: experiments/sdab/R2/data/pdb/sdab.pdb
+    tier2_dir: workspace/sdab_r2/tier2
+    wt_ab_pdb: experiments/sdab/R2/data/pdb/sdab.pdb
+    wt_pdb: experiments/sdab/R2/data/pdb/sdab.pdb
+  pka:
+    his_positions:
+    - chain: A
+      resid: 27
+    - chain: A
+      resid: 28
+    - chain: A
+      resid: 29
+    - chain: A
+      resid: 30
+    - chain: A
+      resid: 31
+    - chain: A
+      resid: 51
+    - chain: A
+      resid: 52
+    - chain: A
+      resid: 53
+    - chain: A
+      resid: 55
+    - chain: A
+      resid: 56
+    - chain: A
+      resid: 105
+    - chain: A
+      resid: 108
+    - chain: A
+      resid: 109
+    - chain: A
+      resid: 110
+    tools:
+    - propka
+    - pkai+
+  rosetta:
+    minimize: true
+    repack_shell: 8.0
+    scorefxn: ref2015
+  simplefold:
+    model: simplefold_3B
+    nsample_per_protein: 3
+    num_steps: 500
+    outlier_global_rmsd: 2.0
+    tau: 0.01
+tier3:
+  output: workspace/sdab_r2/results/final_candidates.csv
+  rank_ascending: true
+  rank_by: dddG_elec
+  soft_flags:
+    consensus_flag: true
+    esm_flag: true
+    phscore_flag: true

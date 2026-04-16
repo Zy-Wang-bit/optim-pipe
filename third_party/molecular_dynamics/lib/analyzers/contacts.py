@@ -10,24 +10,9 @@ from MDAnalysis.analysis.distances import distance_array
 import numpy as np
 import pandas as pd
 
-from .base import BaseAnalyzer
+from .base import BaseAnalyzer, select_chains
 
 logger = logging.getLogger(__name__)
-
-
-def _chain_selection(chains: list[str], keyword: str = "segid") -> str:
-    parts = [f"{keyword} {c}" for c in chains]
-    return "(" + " or ".join(parts) + ")"
-
-
-def _select_heavy(u: mda.Universe, chains: list[str]) -> mda.AtomGroup:
-    """Select heavy atoms (not H) for given chains, segid then chainID."""
-    sel = f"not name H* and {_chain_selection(chains, 'segid')}"
-    grp = u.select_atoms(sel)
-    if len(grp) == 0:
-        sel = f"not name H* and {_chain_selection(chains, 'chainID')}"
-        grp = u.select_atoms(sel)
-    return grp
 
 
 class ContactsAnalyzer(BaseAnalyzer):
@@ -44,8 +29,8 @@ class ContactsAnalyzer(BaseAnalyzer):
         ag_chains = self.analysis_cfg["antigen_chains"]
         cutoff = self.analysis_cfg.get("contact_distance", 4.5)
 
-        ab = _select_heavy(u, ab_chains)
-        ag = _select_heavy(u, ag_chains)
+        ab = select_chains(u, ab_chains, "not name H*")
+        ag = select_chains(u, ag_chains, "not name H*")
 
         if len(ab) == 0 or len(ag) == 0:
             raise ValueError(f"Empty selection: ab={len(ab)}, ag={len(ag)}")

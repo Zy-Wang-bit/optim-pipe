@@ -47,14 +47,14 @@ def main():
             "d_rmsd": deltas.get("delta_rmsd", None),
             "d_rmsf": deltas.get("delta_rmsf_global", None),
             # pairwise His occupancy pH 7.4
-            "His99_occ_74": s74.get("pairwise_dist_His99-THR123_occupancy_4.5A", None),
-            "His110_occ_74": s74.get("pairwise_dist_His110-LYS122_occupancy_4.5A", None),
-            "His61_occ_74": s74.get("pairwise_dist_His61-THR118_occupancy_4.5A", None),
+            "His99_occ_74": s74.get("pairwise_dist_His99-THR245_occupancy_4.5A", None),
+            "His110_occ_74": s74.get("pairwise_dist_His110-LYS244_occupancy_4.5A", None),
+            "His61_occ_74": s74.get("pairwise_dist_His61-THR240_occupancy_4.5A", None),
             "ARG72_His99_74": s74.get("pairwise_dist_ARG72-His99_occupancy_4.5A", None),
             # pairwise His occupancy pH 6.0
-            "His99_occ_60": s60.get("pairwise_dist_His99-THR123_occupancy_4.5A", None),
-            "His110_occ_60": s60.get("pairwise_dist_His110-LYS122_occupancy_4.5A", None),
-            "His61_occ_60": s60.get("pairwise_dist_His61-THR118_occupancy_4.5A", None),
+            "His99_occ_60": s60.get("pairwise_dist_His99-THR245_occupancy_4.5A", None),
+            "His110_occ_60": s60.get("pairwise_dist_His110-LYS244_occupancy_4.5A", None),
+            "His61_occ_60": s60.get("pairwise_dist_His61-THR240_occupancy_4.5A", None),
             # absolute values
             "contacts_74": s74.get("contacts_n_contacts_mean", None),
             "contacts_60": s60.get("contacts_n_contacts_mean", None),
