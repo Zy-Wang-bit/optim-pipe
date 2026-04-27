@@ -1,0 +1,61 @@
+# sdab R4 candidate MD analysis config (inherits MD params from md_config_sdab.yaml;
+# differs only in analysis.cdr_regions to cover full CDR3 incl. D110H/Y111H).
+# MD itself doesn't use cdr_regions — this file only matters for analyze_trajectory.py.
+
+md:
+  gmx_executable: "gmx"
+  force_field: "amber99sb-ildn"
+  water_model: "tip3p"
+  box_type: "dodecahedron"
+  box_distance: 1.0
+  ion_concentration: 0.15
+  temperature: 310
+  max_warnings: 2
+
+  stages:
+    minimization:
+      max_steps: 5000
+      emtol: 1000.0
+    nvt:
+      duration_ps: 200
+      dt_ps: 0.001
+    npt:
+      duration_ps: 1000
+      dt_ps: 0.001
+    production:
+      duration_ns: 50
+      dt_ps: 0.002
+      save_interval_ps: 100
+
+  cphmd:
+    enabled: false
+
+  gpu:
+    device_id: 0
+    ntmpi: 1
+    ntomp: 5
+
+  output_dir: "experiments/sdab/R4/md"
+
+analysis:
+  antibody_chains: ["A"]
+  antigen_chains: ["B"]
+
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 33 }    # R4 candidate CDR1 positions 26-33
+    H2: { chain: "A", start: 51, end: 58 }    # R4 candidate CDR2 positions 51-58
+    H3: { chain: "A", start: 97, end: 111 }   # R4 candidate CDR3 positions 97-111 (covers D110H/Y111H/V105H)
+
+  convergence:
+    window_ns: 5.0
+    variance_threshold: 0.05
+
+  contact_distance: 4.5
+
+  # No mutant-specific pairwise pairs — they differ per variant.
+  # Interface distance dynamics covered by `contacts` analyzer (all residue pairs within cutoff).
+  pairwise_dist:
+    pairs: []
+
+  mmpbsa:
+    enabled: false

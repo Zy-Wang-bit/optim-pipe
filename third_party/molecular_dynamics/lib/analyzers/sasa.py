@@ -37,10 +37,10 @@ def _compute_sasa_freesasa(atom_group: mda.AtomGroup) -> float:
         }.get(element.upper(), 1.7)
         radii.append(vdw)
 
+    # freesasa 2.x: calcCoord(coord, radii[, parameters]); default params are fine.
     result = freesasa.calcCoord(
-        coord=coords.flatten().tolist(),
-        radii=radii,
-        nPoints=100,
+        coords.flatten().tolist(),
+        radii,
     )
     return result.totalArea()
 

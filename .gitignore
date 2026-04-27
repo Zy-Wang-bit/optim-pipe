@@ -36,6 +36,12 @@ __pycache__/
 .claude/
 .tasks/
 .agents/
+.codex
+
+# Generated docs and delivery artifacts
+docs/slides/
+docs/wet_lab_delivery/archive/
+docs/wet_lab_delivery/figures/
 
 # Environment / secrets
 .env

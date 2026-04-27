@@ -2,6 +2,8 @@
 
 pH 依赖性抗体亲和力优化的自动化计算流水线。
 
+> Codex 衔接：Codex 的项目入口为 `AGENTS.md`。修改环境、任务管理、编码规范等共享协作规则时，应同步更新 `AGENTS.md` 与本文件。
+
 ## 环境
 
 - **主环境**: `conda activate optim-pipe` (Python 3.11, PyTorch 2.8, fair-esm 2.0, BioPython 1.85)
@@ -25,13 +27,13 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 
 | 目录 | 职责 |
 |------|------|
-| `scripts/` | 核心 pipeline 脚本（4 Phase / 12 Step） |
+| `scripts/` | 核心 pipeline 脚本（3 Tier / 13 Step） |
 | `configs/` | YAML 配置文件 |
 | `analysis/` | 后分析代码（pKa、Rosetta、RMSD、ELISA 关联） |
 | `experiments/` | 按抗体系统/轮次组织的实验数据 |
 | `tier2/` | Tier 2 运行时输出（structures/、pka/、rosetta/、rmsd/） |
 | `phase_c/` | 旧模式 Phase C 运行时输出 |
-| `docs/` | 路线图、设计文档、分析报告 |
+| `docs/` | 路线图、分析报告、湿实验交付和汇报材料 |
 | `third_party/` | 外部工具（FoldX、ProteinMPNN、SimpleFold） |
 | `third_party/molecular_dynamics/` | 独立 MD 模块（GROMACS 自动化 + 轨迹分析） |
 | `archive/` | 历史归档 |

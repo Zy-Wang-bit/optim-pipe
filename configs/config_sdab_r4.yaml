@@ -1,0 +1,48 @@
+## sdab R4 — CDR His combinatorial validation
+## Input: 16 candidates from candidates_combined_100.csv (Track A=8 + Track B=8)
+## Steps: FoldX BuildModel + AnalyseComplex at pH 7.4/6.0, then Rosetta dddG_elec + ph_score
+
+paths:
+  foldx_bin: "third_party/foldx/foldx"
+  foldx_dir: "experiments/sdab/R4/foldx"
+
+design:
+  chain: "A"            # sdab heavy chain
+
+interface:
+  ab_chains: ["A"]
+  ag_chains: ["B"]
+  cutoff: 5.0
+
+foldx:
+  ph_points: [7.4, 6.0]
+  number_of_runs: 1
+  analyse_groups: "A;B"
+
+resources:
+  foldx_chunk_size: 16
+  foldx_max_procs: 64   # computer2 has 128 cores; leave room for system
+  omp_threads: 1
+
+tier2:
+  enabled: true
+  paths:
+    wt_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    wt_ab_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    template_pdb: "experiments/sdab/R2/data/pdb/sdab.pdb"
+    tier2_dir: "experiments/sdab/R4/tier2"
+  chains:
+    binder: ["A"]
+    target: ["B"]
+    heavy: "A"
+    light: null
+  cdr_regions:
+    H1: { chain: "A", start: 26, end: 35 }
+    H2: { chain: "A", start: 50, end: 65 }
+    H3: { chain: "A", start: 95, end: 112 }
+  structure_generation:
+    primary: "rosetta"
+  rosetta:
+    repack_shell: 8.0
+    minimize: true
+    scorefxn: "ref2015"

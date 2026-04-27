@@ -19,7 +19,13 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 
 详细路线图见 [ROADMAP.md](docs/ROADMAP.md)。
 
----c pu
+---
+
+## AI 协作入口
+
+- `AGENTS.md`：Codex 的项目入口，包含环境、工作区保护、任务管理和常用命令。
+- `CLAUDE.md`：Claude Code 的历史工作协议。修改共享协作规则时，应与 `AGENTS.md` 保持同步。
+- `.tasks/`：仅用于跨多轮对话的大任务续接；普通一次性修复和问答不需要新建任务。
 
 ## 环境配置
 
@@ -75,7 +81,8 @@ CLEAN=1 bash run_pipeline.sh
 optim-pipe/
 │
 ├── README.md                # 项目总览
-├── CLAUDE.md                # AI 工作协议 + 跨对话任务管理
+├── AGENTS.md                # Codex 工作协议 + 跨对话任务管理
+├── CLAUDE.md                # Claude Code 工作协议 + 历史约定
 ├── run_pipeline.sh          # 主入口：3 Tier / 13 Step pipeline
 │
 ├── configs/                 # 配置文件
@@ -124,8 +131,9 @@ optim-pipe/
 │
 ├── docs/                    # 文档
 │   ├── ROADMAP.md           #   后续工作路线图
-│   ├── design/              #   设计文档
-│   └── reports/             #   分析报告
+│   ├── reports/             #   分析报告
+│   ├── wet_lab_delivery/    #   湿实验交付材料
+│   └── slides/              #   汇报材料
 │
 ├── third_party/             # 外部工具与依赖
 │   ├── ProteinMPNN/         #   序列设计

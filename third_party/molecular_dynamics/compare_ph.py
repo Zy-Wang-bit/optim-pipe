@@ -44,8 +44,12 @@ def compare_ph(variant_dir: Path, base_ph: float, target_ph: float) -> dict:
         ("contacts_n_contacts_mean", "delta_n_contacts"),
         ("mmpbsa_dG_bind_mean", "delta_dG_bind"),
     ]
+    # Summary keys use pattern rmsf_<cdr>_rmsf_mean and rmsd_<cdr>_rmsd_mean,
+    # not rmsf_rmsf_<cdr>_mean — the latter never matches so per-CDR deltas were
+    # silently dropped.
     for cdr in ("h1", "h2", "h3", "l1", "l2", "l3"):
-        compare_keys.append((f"rmsf_rmsf_{cdr}_mean", f"delta_rmsf_{cdr}"))
+        compare_keys.append((f"rmsf_{cdr}_rmsf_mean", f"delta_rmsf_{cdr}"))
+        compare_keys.append((f"rmsd_{cdr}_rmsd_mean", f"delta_rmsd_{cdr}"))
 
     for src_key, delta_key in compare_keys:
         base_val = base_summary.get(src_key)

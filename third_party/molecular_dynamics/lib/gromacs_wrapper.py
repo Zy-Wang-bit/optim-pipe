@@ -64,7 +64,7 @@ class GromacsWrapper:
             input=stdin_text,
             capture_output=True,
             text=True,
-            timeout=3600 * 24,  # 24h max per command
+            timeout=None,  # no wall-clock timeout; long MD sims may exceed 24h
         )
         if check and result.returncode != 0:
             raise GromacsError(args[0], result.returncode, result.stderr)

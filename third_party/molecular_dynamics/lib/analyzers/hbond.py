@@ -43,8 +43,16 @@ class HBondAnalyzer(BaseAnalyzer):
         ab_indices = set(ab.indices)
         ag_indices = set(ag.indices)
 
-        # Run H-bond analysis on entire system
-        hbond = HydrogenBondAnalysis(u)
+        # Restrict donors/acceptors to protein only — water-water H-bonds dominate
+        # a solvated 165k-atom system (~100k atoms of water) and make the default
+        # all-system analysis unusable (hours per trajectory). Fixed selection also
+        # lets update_selections=False, skipping per-frame reselection.
+        hbond = HydrogenBondAnalysis(
+            u,
+            donors_sel="protein",
+            acceptors_sel="protein",
+            update_selections=False,
+        )
         hbond.run()
 
         # hbond.results.hbonds columns:
