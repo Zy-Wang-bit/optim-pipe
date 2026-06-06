@@ -1,0 +1,36 @@
+output_root: results/ph_sensitive_40aa_window
+
+targets:
+  - name: 1E62
+    antibody_type: scFv
+    heavy_fasta: experiments/1E62/data/heavy.fasta
+    light_fasta: experiments/1E62/data/light.fasta
+    antigen_fasta: experiments/1E62/data/antigen_genotypes.fasta
+    antigen_name: AeS
+    antigen_chain: C
+    antibody_segments:
+      - segment: VH
+        chain: H
+        molecule: heavy
+      - segment: VL
+        chain: L
+        molecule: light
+  - name: sdAb
+    antibody_type: VHH
+    sdab_fasta: experiments/sdab/R2/data/sdab.fasta
+    antigen_fasta: experiments/sdab/R2/data/antigen.fasta
+    antigen_name: AeS
+    antigen_chain: B
+    antibody_segments:
+      - segment: VHH
+        chain: A
+        molecule: sdab
+
+af3:
+  home: /data/ziyang/code/af3-local
+  model_dir: /data/ziyang/code/af3-local/models
+  db_dir: /data/ziyang/code/af3-local/databases/af3_database
+  runner: /data/ziyang/code/af3-local/src/AF3Score/run_af3score.py
+  python: /data/ziyang/code/af3-local/env/bin/python
+  seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  models_per_seed: 5

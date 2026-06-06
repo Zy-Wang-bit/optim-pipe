@@ -1,0 +1,7 @@
+figure	source
+fig1_r2_elisa_key_variants.png	.tasks/active/hbsag-genotype-generalization/artifacts/r2_per_type_phenotype_table.csv
+fig2_hbsag_type_sensitive_map.png	.tasks/active/hbsag-genotype-generalization/artifacts/antigen_difference_table.md
+fig3_foldx_auc_boundary.png	.tasks/active/hbsag-genotype-generalization/artifacts/foldx_validation_legacy/findings.md
+fig4_af3_ces_rank_scores.png	experiments/1E62/R4/af3_ces_wt_corrected_light/summary/ranked_structures.tsv
+fig5_1e62_r3_md_delta_contacts.png	docs/wet_lab_delivery/1e62_r3_design_summary.md
+fig6_sdab_32_variant_overview.png	docs/wet_lab_delivery/sdab_design_summary.md

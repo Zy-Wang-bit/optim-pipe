@@ -1,0 +1,15 @@
+required_columns:
+  - target
+  - pair_id
+  - position_scheme
+  - mutation_a_position
+  - mutation_a_from
+  - mutation_a_to
+  - mutation_b_position
+  - mutation_b_from
+  - mutation_b_to
+  - constraint_type
+  - constraint_source
+  - constraint_confidence
+  - applies_to_generation
+  - applies_to_final_library

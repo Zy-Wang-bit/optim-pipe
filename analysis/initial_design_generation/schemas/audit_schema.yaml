@@ -1,0 +1,63 @@
+required_outputs:
+  - generation_audit.csv
+  - filter_audit.csv
+  - route_summary.csv
+  - position_frequency.csv
+  - his_distribution.csv
+  - mutation_order_distribution.csv
+  - near_duplicate_cluster_summary.csv
+  - control_design_duplicate_report.csv
+  - dry_run_validation_report.md
+  - run_manifest.yaml
+p0_mpnn_required_outputs:
+  - mpnn_scores_current_pool.csv
+  - mpnn_score_distribution_by_route.csv
+  - mpnn_score_distribution_by_his_seed.csv
+  - mpnn_score_distribution_by_rescue_type.csv
+  - mpnn_parent_delta_by_route.csv
+  - mpnn_low_score_high_pH_support_candidates.csv
+  - mpnn_high_score_no_pH_mechanism_candidates.csv
+  - constrained_mpnn_rescue_plan.csv
+  - constrained_mpnn_rescue_pool_1E62.csv
+  - constrained_mpnn_rescue_pool_sdAb.csv
+  - constrained_mpnn_rescue_audit.csv
+  - candidate_rescue_mutations_mpnn.csv
+  - relaxed_mpnn_counterfactual_plan.csv
+  - relaxed_mpnn_counterfactual_pool_1E62.csv
+  - relaxed_mpnn_counterfactual_pool_sdAb.csv
+  - relaxed_mpnn_counterfactual_audit.md
+  - mpnn_runner_input_requirements.yaml
+  - mpnn_runner_preflight_report.md
+  - mpnn_backbone_manifest.yaml
+  - mpnn_backbone_manifest_audit.csv
+  - mpnn_backbone_preparation_report.md
+  - mpnn_score_only_collection_audit.csv
+  - constrained_mpnn_generation_collection_audit.csv
+  - relaxed_mpnn_generation_collection_audit.csv
+  - p0_mpnn_result_collection_report.md
+  - p0_mpnn_result_collection_manifest.yaml
+  - p0_mpnn_comparison_report.md
+  - p0_mpnn_manifest.yaml
+p0_mpnn_validation_outputs:
+  - p0_mpnn_validation_report.md
+p0_mpnn_runner_required_outputs:
+  - jsonl/parsed_pdbs.jsonl
+  - jsonl/chain_id.jsonl
+  - jsonl/fixed_positions.jsonl
+  - jsonl/omit_AA.jsonl
+  - jsonl/relaxed/parsed_pdbs.jsonl
+  - jsonl/relaxed/chain_id.jsonl
+  - jsonl/relaxed/fixed_positions.jsonl
+  - jsonl/relaxed/omit_AA.jsonl
+  - mpnn_runner_jobs_constrained.csv
+  - mpnn_constrained_command_plan.csv
+  - mpnn_runner_jobs_relaxed.csv
+  - mpnn_relaxed_command_plan.csv
+  - mpnn_score_only_input_manifest.csv
+  - constrained_generation_runner_commands.sh
+  - relaxed_generation_runner_commands.sh
+  - score_only_runner_commands.sh
+  - mpnn_runner_input_generation_report.md
+p0_mpnn_backbone_required_outputs:
+  - af3_1E62_seed7_model5_rank1.pdb
+  - af3_sdAb_seed16_model5_rank1.pdb

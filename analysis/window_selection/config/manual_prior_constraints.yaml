@@ -1,0 +1,86 @@
+constraints:
+  - constraint_id: 1e62_L41_hard_protect
+    target: 1E62
+    chain: L
+    position: 41
+    position_pair:
+    constraint_type: hard_protect
+    evidence_level: confirmed
+    evidence_source: manual_project_prior
+    source_antigen: AeS
+    source_pH_definition: mixed_project_prior
+    endpoint_type: manual_constraint
+    endpoint_condition: construct_integrity
+    allowed_usage: hard_filter
+    applies_to_AeS_window_selection: true
+    applies_to_library_design: true
+    rationale: 1E62 light-chain L41/W41 is a strong protection site.
+    source_note: Manual prior from project review.
+  - constraint_id: 1e62_H35_H37_HHH_soft_risk
+    target: 1E62
+    chain: H
+    position:
+    position_pair: H35-H37
+    constraint_type: soft_risk
+    evidence_level: probable
+    evidence_source: manual_project_prior
+    source_antigen: AeS
+    source_pH_definition: mixed_project_prior
+    endpoint_type: manual_constraint
+    endpoint_condition: HHH_cluster
+    allowed_usage: risk_label
+    applies_to_AeS_window_selection: true
+    applies_to_library_design: true
+    rationale: 1E62 H35-H37 HHH cluster should be treated as a risk/mechanism tag.
+    source_note: Manual prior from project review.
+  - constraint_id: sdab_F37_hard_protect
+    target: sdAb
+    chain: A
+    position: 37
+    position_pair:
+    constraint_type: hard_protect
+    evidence_level: confirmed
+    evidence_source: manual_project_prior
+    source_antigen: AeS
+    source_pH_definition: mixed_project_prior
+    endpoint_type: manual_constraint
+    endpoint_condition: framework_integrity
+    allowed_usage: hard_filter
+    applies_to_AeS_window_selection: true
+    applies_to_library_design: true
+    rationale: sdAb FR2/FR3 framework site should be protected.
+    source_note: Manual prior from project review.
+  - constraint_id: sdab_F47_A49_G50_hard_protect
+    target: sdAb
+    chain: A
+    position:
+    position_pair: A47-A49-A50
+    constraint_type: hard_protect
+    evidence_level: confirmed
+    evidence_source: manual_project_prior
+    source_antigen: AeS
+    source_pH_definition: mixed_project_prior
+    endpoint_type: manual_constraint
+    endpoint_condition: framework_integrity
+    allowed_usage: hard_filter
+    applies_to_AeS_window_selection: true
+    applies_to_library_design: true
+    rationale: sdAb F47/A49/G50 framework positions should be protected.
+    source_note: Manual prior from project review.
+  - constraint_id: sdab_V105H_D110H_negative_pair
+    target: sdAb
+    chain: A
+    position:
+    position_pair: A105H-A110H
+    constraint_type: negative_pair
+    evidence_level: probable
+    evidence_source: manual_project_prior
+    source_antigen: AeS
+    source_pH_definition: mixed_project_prior
+    endpoint_type: manual_constraint
+    endpoint_condition: pH7_neutral_binding_risk
+    allowed_usage: risk_label
+    applies_to_AeS_window_selection: true
+    applies_to_library_design: true
+    rationale: V105H-D110H combination has neutral-binding collapse risk.
+    source_note: Manual prior from project review.

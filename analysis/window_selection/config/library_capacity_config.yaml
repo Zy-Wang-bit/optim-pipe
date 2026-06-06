@@ -1,0 +1,36 @@
+max_mutation_order: 3
+min_usable_noncontrol_variant_count: 10000
+control_variant_budget: 256
+
+default_allowed_classes:
+  designable:
+    - histidine
+    - polar
+    - charged
+    - small
+    - aromatic
+  soft_risk:
+    - histidine
+    - polar
+    - small
+  hard_protected: []
+
+mutation_classes:
+  histidine: [H]
+  polar: [S, T, N, Q]
+  charged: [D, E, K, R]
+  small: [A, G]
+  aromatic: [Y, F, W]
+
+forbidden_pair_constraints:
+  - target: sdAb
+    pair: A105H-A110H
+    reason: V105H-D110H neutral-binding collapse risk
+
+glycan_envelope_mode: heuristic
+glycan_guardrails:
+  heuristic_radius_angstrom: 8.0
+  bulky_or_positive_classes:
+    - aromatic
+    - charged
+  bulky_or_positive_residues: [W, F, Y, R, K]

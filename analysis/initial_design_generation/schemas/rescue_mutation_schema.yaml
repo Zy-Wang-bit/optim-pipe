@@ -1,0 +1,23 @@
+required_columns:
+  - variant_id
+  - generation_record_id
+  - target
+  - rescue_index
+  - rescue_position_scheme
+  - rescue_position
+  - rescue_window_local_position
+  - parent_aa
+  - mutant_aa
+  - rescue_type
+  - rescue_objective
+  - linked_his_seed
+  - linked_pH_sensitive_module
+  - source_evidence
+  - source_route
+  - risk_flags
+  - allowed_by_evidence_ledger
+optional_columns:
+  - mpnn_generation_status
+  - mpnn_model_version
+  - mpnn_sample_id
+  - mpnn_random_seed

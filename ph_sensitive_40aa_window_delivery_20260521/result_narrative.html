@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>pH 敏感抗体 40 aa 窗口筛选总结与建议</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #657087;
+      --line: #dce2ec;
+      --blue: #2454a6;
+      --green: #167255;
+      --amber: #9b5d00;
+      --red: #a33a3a;
+      --soft-blue: #edf4ff;
+      --soft-green: #eaf8f1;
+      --soft-amber: #fff6e6;
+      --soft-red: #fff0f0;
+      --soft-gray: #f2f4f8;
+      --shadow: 0 14px 34px rgba(23, 32, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.62;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 34px 22px 56px;
+    }
+
+    header, .section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      padding: 30px;
+    }
+
+    .section {
+      margin-top: 26px;
+    }
+
+    .eyebrow {
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      line-height: 1.22;
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      font-size: 26px;
+      margin-bottom: 14px;
+    }
+
+    h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    .lead {
+      color: var(--muted);
+      max-width: 940px;
+      font-size: 16px;
+    }
+
+    .summary-grid, .fact-grid, .two-col, .three-col, .footer-links {
+      display: grid;
+      gap: 12px;
+    }
+
+    .summary-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 24px;
+    }
+
+    .fact-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 12px 0;
+    }
+
+    .two-col {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 14px;
+    }
+
+    .three-col {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 14px;
+    }
+
+    .footer-links {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 16px;
+    }
+
+    .metric, .fact, .link-card {
+      background: #fbfcff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px 14px;
+    }
+
+    .metric {
+      background: var(--soft-gray);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1.15;
+    }
+
+    .metric span, .fact small, .link-card span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .fact b {
+      display: block;
+      font-size: 18px;
+    }
+
+    .target-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 20px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 18px;
+      margin-bottom: 22px;
+    }
+
+    .target-title .status {
+      color: var(--muted);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 16px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .step-number {
+      width: 34px;
+      height: 34px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--soft-blue);
+      color: var(--blue);
+      font-weight: 800;
+      border: 1px solid #c9daf8;
+    }
+
+    .step-body {
+      border-left: 3px solid var(--line);
+      padding-left: 18px;
+      padding-bottom: 4px;
+    }
+
+    .step-body h3 {
+      margin-top: 3px;
+    }
+
+    .callout {
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      padding: 13px 14px;
+      margin: 12px 0 0;
+      background: var(--soft-gray);
+    }
+
+    .callout.good {
+      background: var(--soft-green);
+      border-color: #bee9d2;
+    }
+
+    .callout.warn {
+      background: var(--soft-amber);
+      border-color: #f0d49a;
+    }
+
+    .callout.danger {
+      background: var(--soft-red);
+      border-color: #f3c0c0;
+    }
+
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      vertical-align: baseline;
+      border: 1px solid var(--line);
+      background: var(--soft-gray);
+      color: var(--muted);
+    }
+
+    .pill.a {
+      background: var(--soft-green);
+      color: var(--green);
+      border-color: #bee9d2;
+    }
+
+    .pill.b {
+      background: var(--soft-amber);
+      color: var(--amber);
+      border-color: #f0d49a;
+    }
+
+    .pill.low {
+      background: #eef8f5;
+      color: var(--green);
+      border-color: #c8e9dd;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 8px;
+      font-size: 14px;
+    }
+
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 9px;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: #fafbfe;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+      background: #eef1f6;
+      padding: 1px 5px;
+      border-radius: 5px;
+    }
+
+    .note-list {
+      margin: 8px 0 0;
+      padding-left: 19px;
+    }
+
+    .note-list li {
+      margin: 5px 0;
+    }
+
+    .link-card {
+      display: block;
+    }
+
+    .link-card strong {
+      display: block;
+      color: var(--ink);
+    }
+
+    @media (max-width: 820px) {
+      .summary-grid, .fact-grid, .two-col, .three-col, .footer-links {
+        grid-template-columns: 1fr;
+      }
+
+      .target-title {
+        display: block;
+      }
+
+      .target-title .status {
+        margin-top: 8px;
+        display: block;
+      }
+
+      .step {
+        grid-template-columns: 1fr;
+      }
+
+      .step-body {
+        border-left: 0;
+        padding-left: 0;
+      }
+
+      header, .section {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div class="eyebrow">40 aa window selection review</div>
+      <h1>pH 敏感抗体 40 aa 窗口筛选总结与建议</h1>
+      <p class="lead">
+        本报告用通俗语言说明本轮窗口选择工作：我们为什么要限定在连续 40 个氨基酸内设计、怎样评估 233 个候选窗口、AF3 结构和湿实验数据各自提供了什么证据，以及最终为什么推荐 1E62 的 <code>VL:1-40</code> 和 sdAb 的 <code>VHH:72-111</code> / <code>VHH:75-114</code>。
+      </p>
+      <div class="summary-grid">
+        <div class="metric">
+          <strong>233</strong>
+          <span>候选 40 aa 窗口完成评分；1E62 = 150，sdAb = 83</span>
+        </div>
+        <div class="metric">
+          <strong>150</strong>
+          <span>AF3 亲本复合物模型；1E62 = 50，sdAb = 100</span>
+        </div>
+        <div class="metric">
+          <strong>10k</strong>
+          <span>每批酵母展示库的目标序列规模；容量超过后只作通过门槛</span>
+        </div>
+        <div class="metric">
+          <strong>0 / 0</strong>
+          <span>严格校验 FAIL / WARN</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>一句话结论</h2>
+      <div class="two-col">
+        <div class="callout good">
+          <h3>1E62：主窗口明确</h3>
+          <p><strong>推荐主窗口：</strong><code>1E62_VL_001_040</code>，即轻链 <code>VL:1-40</code>。</p>
+          <p>理由是它覆盖 CDR1 和邻近骨架区，包含 L26H 等 pH 开关候选，并且 AF3 结构稳定支持它靠近 HBsAg 抗原表面。这个窗口适合作为下一批 10k 主库。</p>
+        </div>
+        <div class="callout warn">
+          <h3>sdAb：应作为探索性库</h3>
+          <p><strong>推荐主探索窗口：</strong><code>sdAb_VHH_072_111</code>；相近替代为 <code>sdAb_VHH_075_114</code>。</p>
+          <p>sdAb 的 AF3 模型没有提供稳定直接界面证据，因此窗口选择主要依赖已有湿实验 His 种子和调控假设。<code>VHH:57-96</code> 保留为次级探索窗口。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>筛选思路回顾</h2>
+      <p class="lead">
+        本轮工作的目标不是直接给出完整突变库，而是先回答一个更基础的问题：每个抗体下一批 10k 设计应该集中在哪一个连续 40 aa 区间内。
+      </p>
+      <div class="timeline">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-body">
+            <h3>先定义能做什么、不能做什么</h3>
+            <p>实验要求每批库约 10,000 条序列，所有变异必须落在一个连续 40 aa 窗口内。我们还需要同时追求两个目标：pH 7.4 下还能结合抗原，pH 6.0 下更容易释放抗原。</p>
+            <p>因此，窗口不能只看“哪里可以突变”，还要避开关键结构位点，例如形成二硫键的半胱氨酸，并避免高风险突变组合。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-body">
+            <h3>枚举所有候选窗口</h3>
+            <p>我们对两个抗体逐段滑动枚举连续 40 aa 区间。1E62 拆成重链和轻链评估，sdAb 按单条 VHH 链评估。</p>
+            <div class="fact-grid">
+              <div class="fact"><b>150</b><small>1E62 候选窗口</small></div>
+              <div class="fact"><b>83</b><small>sdAb 候选窗口</small></div>
+              <div class="fact"><b>9,320</b><small>逐位 mutation mask 行数，等于 233 个窗口 x 40 位点</small></div>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-body">
+            <h3>用 AF3 看抗体大概贴在哪里</h3>
+            <p>AlphaFold3 结构不是最终真相，但可以帮助判断抗体是否稳定靠近 HBsAg 的关键表面区域。我们重点看 HBsAg 100-164 抗原性环，以及 124-147 A determinant 区域。</p>
+            <p>为了避免被单个模型误导，我们使用多个 seed 和多个结构样本，并检查接触是否在不同模型中反复出现。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-body">
+            <h3>把湿实验信息转成设计判断</h3>
+            <p>已有单点和组合 His 突变实验告诉我们：哪些位置可能带来 pH 敏感性，哪些组合可能伤害 pH 7.4 下的中性结合。1E62 和 sdAb 的证据强弱不同，所以最终策略也不同。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">5</div>
+          <div class="step-body">
+            <h3>容量只作为通过门槛</h3>
+            <p>每个窗口都会计算理论可设计空间。只要可用非 control 变体数超过 10,000，就认为容量满足要求；超过 10k 后，不能因为某个窗口理论容量更大就自动排第一。</p>
+            <div class="callout">
+              <strong>通俗理解：</strong>容量表示“这个窗口能提供多大的候选池”，不是实际要做两千万个变体。真正实验仍然只从这个候选池里设计约 10,000 条序列。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>关键评估项</h2>
+      <div class="three-col">
+        <div class="fact">
+          <b>结构接触</b>
+          <small>看抗体窗口是否稳定靠近 HBsAg 关键表面。1E62 有强支持，sdAb 没有形成稳定正证据。</small>
+        </div>
+        <div class="fact">
+          <b>湿实验种子</b>
+          <small>已有 His 突变数据帮助判断哪些位置更可能影响 pH 释放或中性结合。</small>
+        </div>
+        <div class="fact">
+          <b>风险控制</b>
+          <small>保护 Cys 等关键位点，禁止负协同组合，避免糖链遮挡或过度破坏结构。</small>
+        </div>
+      </div>
+      <div class="callout warn">
+        <strong>重要修正：</strong>审阅后确认，正式进入序列库设计前，需要把 <code>1E62 L23C</code> 和 <code>sdAb A96C</code> 明确加入 hard protect。当前最终结论已经把这一点列为建库约束。
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>糖基化风险怎么看</h2>
+      <p class="lead">
+        HBsAg 的 <code>N146</code> 是一个需要特别注意的糖基化位点。通俗地说，N146 上可能挂着一串糖链；如果抗体或突变后的侧链太靠近这串糖链，真实实验中可能会被糖链挡住，导致模型里看起来能结合、实际却结合不好。
+      </p>
+      <div class="timeline">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-body">
+            <h3>为什么要加糖链护栏</h3>
+            <p>我们的设计目标是让抗体识别 HBsAg 表面，而不是设计出一个会钻进 N146 糖链空间里的突变。糖链遮挡风险高的窗口或突变位点，即使有 pH 调控潜力，也不适合作为主库核心。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-body">
+            <h3>本轮怎么评估</h3>
+            <p>本轮没有做显式糖链构象采样，而是采用 <code>N146</code> 几何距离的 heuristic guardrail：对每个窗口的 40 个位点检查它们相对 N146 糖链空间的距离和扩展风险，并标记是否需要限制突变。</p>
+            <div class="fact-grid">
+              <div class="fact"><b>9,320</b><small>糖基化护栏逐位记录，等于 233 个窗口 x 40 位点</small></div>
+              <div class="fact"><b>heuristic</b><small>当前模式：N146 几何距离规则，不是显式糖链建模</small></div>
+              <div class="fact"><b>0</b><small>需要 glycan control 的位点数</small></div>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-body">
+            <h3>结果对本次推荐的影响</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>窗口</th>
+                  <th>糖链风险</th>
+                  <th>解释</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>1E62_VL_001_040</code></td>
+                  <td><span class="pill low">low</span></td>
+                  <td>未触发 N146 糖链风险，不影响作为 1E62 主窗口。</td>
+                </tr>
+                <tr>
+                  <td><code>1E62_VL_042_081</code></td>
+                  <td><span class="pill low">low</span></td>
+                  <td>未触发糖链风险，可作为关键备选。</td>
+                </tr>
+                <tr>
+                  <td><code>sdAb_VHH_072_111</code> / <code>sdAb_VHH_075_114</code></td>
+                  <td><span class="pill low">low</span></td>
+                  <td>糖链不是 sdAb 降级原因；sdAb 的不确定性主要来自缺乏稳定结构接触正证据。</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="callout good">
+              <strong>结论：</strong>糖基化风险已经纳入筛选，但本轮所有推荐窗口都是 low risk，因此它没有改变最终窗口排序。它更像一个安全检查：如果某个窗口靠近 N146 糖链空间，就会被限制或降级；这次没有出现这种情况。
+            </div>
+            <div class="callout warn">
+              <strong>局限：</strong>这不是 CHO 表达体系下的完整糖链构象模拟。进入最终候选变体后，如果出现靠近 N146 的大体积或带正电突变，仍建议用显式糖链模型或实验确认一次。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="target-1e62">
+      <div class="target-title">
+        <div>
+          <h2>1E62 scFv</h2>
+          <p class="lead">1E62 的窗口选择相对明确：结构模型和湿实验提示都支持轻链前段作为主设计区。</p>
+        </div>
+        <span class="status"><span class="pill a">主推：VL:1-40</span></span>
+      </div>
+
+      <div class="timeline">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-body">
+            <h3>结构模型给了强方向</h3>
+            <p>1E62 生成了 50 个 AF3 亲本复合物模型，其中 49 个通过质量筛选。多个模型显示轻链区域稳定靠近 HBsAg 抗原性环，这使得窗口选择不只是靠猜测。</p>
+            <div class="fact-grid">
+              <div class="fact"><b>50</b><small>1E62 AF3 模型</small></div>
+              <div class="fact"><b>49 pass</b><small>合格模型数量超过门槛</small></div>
+              <div class="fact"><b>0.999</b><small>推荐窗口的抗原性环接触比例</small></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-body">
+            <h3>主窗口覆盖最有用的实验线索</h3>
+            <p><code>VL:1-40</code> 覆盖轻链 CDR1 和邻近骨架区，包含 <code>L26H</code> 及周边多个弱 pH 敏候选位点。简单说，它既靠近抗原，又有可以尝试作为 pH 开关的位点。</p>
+            <p>这个窗口的理论可用非 control 候选空间为 <code>23,380,178</code>，远高于 10k 门槛。</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-body">
+            <h3>备选窗口用于中性结合保留</h3>
+            <p><code>VL:42-81</code> 被审阅后提升为关键备选，因为它覆盖 <code>L42-L44</code> 相关中性结合保留模块。它的容量略低于 <code>VL:45-84</code> 和 <code>VL:46-85</code>，但仍远高于 10k，因此机制意义比容量差异更重要。</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-body">
+            <h3>最终推荐</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>角色</th>
+                  <th>窗口</th>
+                  <th>定位</th>
+                  <th>关键理由</th>
+                  <th>可用容量</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>主窗口</td>
+                  <td><code>1E62_VL_001_040</code><br />VL:1-40</td>
+                  <td><span class="pill a">强推荐</span></td>
+                  <td>覆盖 CDR1、L26H 及邻近 pH 开关候选；结构接触稳定。</td>
+                  <td>23,380,178</td>
+                </tr>
+                <tr>
+                  <td>关键备选</td>
+                  <td><code>1E62_VL_042_081</code><br />VL:42-81</td>
+                  <td><span class="pill a">备选</span></td>
+                  <td>覆盖 L42-L44 中性结合保留模块。</td>
+                  <td>23,248,941</td>
+                </tr>
+                <tr>
+                  <td>次级备选</td>
+                  <td><code>1E62_VL_045_084</code> / <code>1E62_VL_046_085</code></td>
+                  <td><span class="pill a">备选</span></td>
+                  <td>结构与容量均可接受，但机制优先级低于 VL:42-81。</td>
+                  <td>23,380,178</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="callout good">
+              <strong>1E62 建议：</strong>直接推进 <code>VL:1-40</code> 作为下一批 10k 主库。设计时必须硬保护 <code>L23C</code>，并控制 His 数量，避免过多 His 破坏中性结合。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="target-sdab">
+      <div class="target-title">
+        <div>
+          <h2>sdAb</h2>
+          <p class="lead">sdAb 的结构证据弱，不能按“稳定结构界面”直接选窗口。审阅后，我们更重视已有湿实验 His 种子覆盖情况。</p>
+        </div>
+        <span class="status"><span class="pill b">探索性主库</span></span>
+      </div>
+
+      <div class="timeline">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-body">
+            <h3>AF3 没有给出稳定直接界面</h3>
+            <p>sdAb 已补到 100 个 AF3 模型，其中 73 个通过质量筛选。模型数量不是问题；问题是推荐窗口没有稳定接触 HBsAg 100-164 抗原性环，也没有稳定接触 124-147 A determinant。</p>
+            <div class="fact-grid">
+              <div class="fact"><b>100</b><small>sdAb AF3 模型</small></div>
+              <div class="fact"><b>73 pass</b><small>合格模型数量足够</small></div>
+              <div class="fact"><b>0 / 0</b><small>抗原性环 / A determinant 稳定接触比例</small></div>
+            </div>
+            <div class="callout warn">
+              <strong>通俗解释：</strong>AF3 告诉我们 sdAb 可以建模，但没有告诉我们哪个窗口稳定贴在目标抗原表面。因此 sdAb 设计要定位为探索性，而不是结构强支持的直接界面优化。
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-body">
+            <h3>为什么审阅后主推 VHH:72-111</h3>
+            <p><code>VHH:72-111</code> 覆盖 FR3 支撑区和 CDR3 主体，包含多个已有湿实验 His 种子：<code>Q100H</code>、<code>G102H</code>、<code>V105H</code>、<code>E108H</code>、<code>D110H</code>、<code>Y111H</code>。</p>
+            <p>这些位点不是保证成功，但它们是目前 sdAb 最明确的实验线索。相比之下，自动排序曾把 <code>VHH:57-96</code> 放前面，主要是因为容量更高；审阅后确认容量超过 10k 后不应主导排序。</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-body">
+            <h3>风险必须靠设计规则控制</h3>
+            <p><code>V105H</code> 和 <code>D110H</code> 同时出现会带来明显中性结合风险，因此必须禁止共现。<code>A96C</code> 是关键半胱氨酸，需要硬保护。</p>
+            <p>换句话说，sdAb 不是不能做，而是要带着明确的风险规则做探索性库。</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-body">
+            <h3>最终推荐</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>角色</th>
+                  <th>窗口</th>
+                  <th>定位</th>
+                  <th>关键理由</th>
+                  <th>可用容量</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>主探索窗口</td>
+                  <td><code>sdAb_VHH_072_111</code><br />VHH:72-111</td>
+                  <td><span class="pill b">探索性主库</span></td>
+                  <td>覆盖主要 CDR3 His 种子和 FR3 支撑区。</td>
+                  <td>21,195,927</td>
+                </tr>
+                <tr>
+                  <td>相近替代</td>
+                  <td><code>sdAb_VHH_075_114</code><br />VHH:75-114</td>
+                  <td><span class="pill b">可替代</span></td>
+                  <td>覆盖相同主要 His 种子，略向 C 端移动。</td>
+                  <td>21,195,927</td>
+                </tr>
+                <tr>
+                  <td>次级探索</td>
+                  <td><code>sdAb_VHH_057_096</code><br />VHH:57-96</td>
+                  <td><span class="pill">次选</span></td>
+                  <td>适合测试 FR3/CDR2 调控假设，但不覆盖主要 CDR3 His 种子。</td>
+                  <td>22,858,256</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="callout warn">
+              <strong>sdAb 建议：</strong>继续推进，但要把它定义为探索性库。主窗口选 <code>VHH:72-111</code>，或按建库便利性选择相近的 <code>VHH:75-114</code>；<code>VHH:57-96</code> 只作为辅助探索。
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>最终推荐一览</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>抗体</th>
+            <th>主窗口</th>
+            <th>备选</th>
+            <th>一句话解释</th>
+            <th>正式建库前必须做</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1E62 scFv</td>
+            <td><code>VL:1-40</code></td>
+            <td><code>VL:42-81</code>，其次 <code>VL:45-84</code> / <code>VL:46-85</code></td>
+            <td>结构和湿实验都支持，适合作为主 10k 设计窗口。</td>
+            <td>硬保护 <code>L23C</code>，控制 His 数量。</td>
+          </tr>
+          <tr>
+            <td>sdAb</td>
+            <td><code>VHH:72-111</code></td>
+            <td><code>VHH:75-114</code>；次级探索 <code>VHH:57-96</code></td>
+            <td>结构证据弱，但湿实验 His 种子集中在 CDR3，因此按探索性库推进。</td>
+            <td>硬保护 <code>A96C</code>，禁止 <code>V105H-D110H</code> 共现。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>输出文件</h2>
+      <p>本 HTML 是面向阅读的解释版；完整评分数据和校验结果保留在下列文件中。</p>
+      <div class="footer-links">
+        <a class="link-card" href="./final_recommendation.md">
+          <strong>final_recommendation.md</strong>
+          <span>审阅后的最终窗口推荐摘要</span>
+        </a>
+        <a class="link-card" href="./validation_report.md">
+          <strong>validation_report.md</strong>
+          <span>严格校验结果，42 PASS / 0 WARN / 0 FAIL</span>
+        </a>
+        <a class="link-card" href="./tables/window_scores.csv">
+          <strong>window_scores.csv</strong>
+          <span>233 个候选窗口的完整自动评分表</span>
+        </a>
+      </div>
+      <ul class="note-list">
+        <li><code>window_scores.csv</code> 是自动评分结果；本报告是结合审阅意见后的最终解释。</li>
+        <li><code>af3_model_manifest.csv</code>：150 行；1E62 为 50 个结构，sdAb 为 100 个结构。</li>
+        <li><code>residue_structure_features.csv</code>：23,600 行，用于结构接触、N146 距离和聚类支持统计。</li>
+        <li><code>glycan_guardrail_table.csv</code>：9,320 行，当前为 N146 heuristic guardrail。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
