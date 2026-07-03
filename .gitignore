@@ -43,6 +43,11 @@ analysis/visualize/
 docs/slides/
 docs/wet_lab_delivery/archive/
 docs/wet_lab_delivery/figures/
+docs/design-report/*.pdf
+ph_sensitive_candidate_progress_*/
+submission_*.csv
+submission_*.zip
+*_flat.zip
 
 # Environment / secrets
 .env

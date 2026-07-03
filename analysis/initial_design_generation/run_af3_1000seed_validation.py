@@ -66,8 +66,8 @@ AF3_INFERENCE_ENV_PREFIX = (
     f"PATH={AF3_CUDA_DATA_DIR}/bin:$PATH "
 )
 
-AF3_ALLOWED_GPUS = [0, 1, 2, 5, 6, 7]
-AF3_EXCLUDED_GPUS = [3, 4]
+AF3_ALLOWED_GPUS = list(range(8))
+AF3_EXCLUDED_GPUS: List[int] = []
 AF3_SEEDS = list(range(1, 1001))
 SHARD_SIZE = 50
 MSA_MAX_PARALLEL = 2
@@ -870,7 +870,7 @@ def prepare_af3_inputs() -> None:
                     "shard_id": shard_id,
                     "gpu_id": gpu_id,
                     "cpu_core_set": "",
-                    "resource_policy": "AF3 stage uses GPUs 0,1,5,6,7 only; GPUs 2,3,4 excluded.",
+                    "resource_policy": "AF3 GPU selection is based on real-time GPU availability; no GPU is permanently excluded.",
                     "start_time": "",
                     "end_time": "",
                 }
@@ -1053,6 +1053,17 @@ def run_command_queue(
     """Run shell commands with a fixed concurrency and audit status."""
     log_dir.mkdir(parents=True, exist_ok=True)
     status_rows: List[Dict[str, Any]] = []
+    existing_completed_job_ids: Set[str] = set()
+    if status_path.exists() and status_path.stat().st_size:
+        try:
+            existing_status = pd.read_csv(status_path, low_memory=False)
+        except Exception:
+            existing_status = pd.DataFrame()
+        if not existing_status.empty:
+            status_rows = existing_status.to_dict("records")
+            if {"job_id", "status"}.issubset(existing_status.columns):
+                completed = existing_status["status"].isin(["success", "skipped_existing_output"])
+                existing_completed_job_ids = set(existing_status.loc[completed, "job_id"].astype(str))
     active: List[Dict[str, Any]] = []
     pending = list(jobs)
 
@@ -1091,6 +1102,8 @@ def run_command_queue(
             }
         )
         status_rows.append(row)
+        if returncode == 0 and row.get("job_id") is not None:
+            existing_completed_job_ids.add(str(row["job_id"]))
         pd.DataFrame(status_rows).to_csv(status_path, index=False)
 
     while pending or active:
@@ -1099,6 +1112,9 @@ def run_command_queue(
             current_max_parallel = max(0, min(max_parallel, int(max_parallel_getter())))
         while pending and len(active) < current_max_parallel:
             job = pending.pop(0)
+            job_id = str(job.get("job_id", ""))
+            if job_id in existing_completed_job_ids:
+                continue
             if skip_done is not None and skip_done(job):
                 row = {key: value for key, value in job.items() if not key.startswith("_")}
                 row.update(
@@ -1111,6 +1127,8 @@ def run_command_queue(
                     }
                 )
                 status_rows.append(row)
+                if row.get("job_id") is not None:
+                    existing_completed_job_ids.add(str(row["job_id"]))
                 pd.DataFrame(status_rows).to_csv(status_path, index=False)
                 continue
             launch(job)
@@ -1226,9 +1244,18 @@ def run_inference_queue(
     status_file: Optional[str] = None,
 ) -> None:
     ensure_outdir()
-    split_processed_json()
     shard_path = OUT_DIR / "af3_shard_schedule.csv"
     split_path = OUT_DIR / "processed_json_shard_status.csv"
+    needs_split = True
+    if shard_path.exists() and split_path.exists() and split_path.stat().st_size:
+        try:
+            shard_count = len(pd.read_csv(shard_path, usecols=["target", "variant_id", "shard_id"]))
+            split_status = pd.read_csv(split_path, usecols=["status"])
+            needs_split = int(split_status["status"].eq("written").sum()) < shard_count
+        except Exception:
+            needs_split = True
+    if needs_split:
+        split_processed_json()
     if not shard_path.exists() or not split_path.exists():
         raise FileNotFoundError("Run prepare-af3-inputs and split-processed-json first.")
     shard = pd.read_csv(shard_path, low_memory=False)
