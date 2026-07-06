@@ -29,7 +29,7 @@ def _extract_antibody_sequence(row, cfg):
     if not seq or (isinstance(seq, float) and pd.isna(seq)):
         return None
 
-    t2 = cfg.get("tier2", cfg.get("phase_c", {}))
+    t2 = cfg["tier2"]
     chains_cfg = t2["chains"]
     ab_chains = [chains_cfg["heavy"]]
     if chains_cfg.get("light"):
@@ -50,9 +50,9 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    t2 = cfg.get("tier2", cfg.get("phase_c", {}))
+    t2 = cfg["tier2"]
     sf_cfg = t2["simplefold"]
-    t2_dir = t2["paths"].get("tier2_dir", t2["paths"].get("phase_c_dir", "tier2"))
+    t2_dir = t2["paths"].get("tier2_dir", "tier2")
     input_csv = t2["input"]["csv"]
 
     out_dir = os.path.join(t2_dir, "structures", "simplefold")

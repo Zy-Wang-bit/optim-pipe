@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Step 9 (Phase C): pKa 批量预测 (PROPKA3 + pKAI+)
+Step 9b (Tier 2): pKa 批量预测 (PROPKA3 + pKAI+)
 
 调用 analysis/pka/run_pka.py 的 batch_predict，
 然后将 per-His 长表转换为 per-variant 宽表。
@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Phase C Step 9: pKa 批量预测")
+    parser = argparse.ArgumentParser(description="Tier 2 Step 9b: pKa 批量预测")
     parser.add_argument("config", nargs="?", default="configs/config.yaml",
                         help="配置文件路径 (默认: configs/config.yaml)")
     args = parser.parse_args()
@@ -28,20 +28,14 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg.get("tier2", cfg.get("phase_c", {}))
-    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
+    pc = cfg["tier2"]
+    pc_dir = pc["paths"].get("tier2_dir", "tier2")
     wt_pdb = pc["paths"]["wt_pdb"]
     chains = pc["chains"]
 
     from analysis.pka.run_pka import batch_predict
 
-    # 结构目录: tier2 模式用 rosetta/; 旧模式从 structure_generation.primary 读取
-    if "rosetta" in pc:
-        primary = "rosetta"
-    elif "structure_generation" in pc:
-        primary = pc["structure_generation"]["primary"]
-    else:
-        primary = "rosetta"
+    primary = "rosetta"
     struct_dir = os.path.join(pc_dir, "structures", primary)
 
     out_dir = os.path.join(pc_dir, "pka")
@@ -58,7 +52,7 @@ def main():
         print(f"错误: {struct_dir} 下没有 PDB 文件，请先运行 build_structures.py")
         sys.exit(1)
 
-    print(f"== Phase C: pKa 预测 ==")
+    print(f"== Tier 2: pKa 预测 ==")
     print(f"WT: {wt_pdb}")
     print(f"突变体: {len(pdb_paths)} 个")
     print(f"His 过滤: {his_filter}")

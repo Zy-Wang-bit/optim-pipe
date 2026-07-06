@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Step 10 (Phase C): Rosetta 评分 (pH-score + dddG_elec)
+Step 9c (Tier 2): Rosetta 评分 (pH-score + dddG_elec)
 
 整合 analysis/rosetta/ 下的 pHScoreCalculator 和 dddGElecCalculator，
 批量计算突变体的 pH-score 和 dddG_elec。
@@ -113,7 +113,7 @@ def run_dddg_elec(pdb_paths, binder_chains, target_chains, out_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Phase C Step 10: Rosetta 评分")
+    parser = argparse.ArgumentParser(description="Tier 2 Step 9c: Rosetta 评分")
     parser.add_argument("config", nargs="?", default="configs/config.yaml",
                         help="配置文件路径 (默认: configs/config.yaml)")
     args = parser.parse_args()
@@ -121,15 +121,10 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg.get("tier2", cfg.get("phase_c", {}))
-    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
+    pc = cfg["tier2"]
+    pc_dir = pc["paths"].get("tier2_dir", "tier2")
 
-    if "rosetta" in pc:
-        primary = "rosetta"
-    elif "structure_generation" in pc:
-        primary = pc["structure_generation"]["primary"]
-    else:
-        primary = "rosetta"
+    primary = "rosetta"
     struct_dir = os.path.join(pc_dir, "structures", primary)
     out_dir = os.path.join(pc_dir, "rosetta")
     os.makedirs(out_dir, exist_ok=True)
@@ -142,7 +137,7 @@ def main():
         print(f"错误: {struct_dir} 下没有 PDB 文件")
         sys.exit(1)
 
-    print(f"== Phase C: Rosetta 评分 ==")
+    print(f"== Tier 2: Rosetta 评分 ==")
     print(f"变体: {len(pdb_paths)} 个")
     print(f"Binder chains: {binder_chains}")
     print(f"Target chains: {target_chains}")

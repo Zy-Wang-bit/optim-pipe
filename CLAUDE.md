@@ -32,7 +32,6 @@ pH 依赖性抗体亲和力优化的自动化计算流水线。
 | `analysis/` | 后分析代码（pKa、Rosetta、RMSD、ELISA 关联） |
 | `experiments/` | 按抗体系统/轮次组织的实验数据 |
 | `tier2/` | Tier 2 运行时输出（structures/、pka/、rosetta/、rmsd/） |
-| `phase_c/` | 旧模式 Phase C 运行时输出 |
 | `docs/` | 路线图、分析报告、湿实验交付和汇报材料 |
 | `third_party/` | 外部工具（FoldX、ProteinMPNN、SimpleFold） |
 | `third_party/molecular_dynamics/` | 独立 MD 模块（GROMACS 自动化 + 轨迹分析） |
@@ -47,9 +46,8 @@ Tier 1: 生成 + 高通量筛选（Step 1-8）
   2. run_mpnn_design.py        MPNN 设计 + His 种子
   3. run_esm_chunk.py          ESM 评分 + 候选筛选
   4. repair_pdbs.py            RepairPDB
-  5. precompute_wt_ac.py       WT 基线
-  6. make_mutlist_chunk.py     批次生成
-  7. run_foldx_batch.py        BuildModel + AC
+  5. make_mutlist_chunk.py     批次生成
+  6. run_foldx_batch.py        BuildModel + AC（含 WT 基线缓存）
   8. tier1_filter.py           dG + delta 自适应门槛 → tier1_candidates.csv
 
 Tier 2: 结构评估 + 筛选（Step 9-12，tier2.enabled 控制）
@@ -66,7 +64,7 @@ Tier 3: 精排（Step 13）
   13. merge_and_rank.py        dddG_elec 排序 + 软标记 → final_candidates.csv
 ```
 
-`tier1.enabled: false` 时回退到旧 4 Phase 流程（merge_and_select.py），行为与原 8 步 pipeline 完全一致。
+历史 8-step/Phase C 流程已移除；复跑旧结果请 checkout `d7726f1` 或 `64cfb02`。
 
 ## 任务管理
 
@@ -116,18 +114,19 @@ Tier 3: 精排（Step 13）
 
 - 配置路径统一使用 `configs/config.yaml`，不硬编码绝对路径
 - 实验数据放 `experiments/<系统>/<轮次>/`，分析代码放 `analysis/`
+- 历史一次性分析脚本和被移除的工作流入口记录在 `analysis/archive/README.md`；需要时从 git 历史恢复
 - 新增外部工具放 `third_party/`
-- Pipeline 运行时输出（results/, foldx/, phase_c/, logs/ 等）由 .gitignore 管理，不提交
+- Pipeline 运行时输出（results/, foldx/, tier2/, logs/ 等）由 .gitignore 管理，不提交
 
 ## 注意事项
 
 - 所有脚本必须从仓库根目录运行（使用相对路径如 `mpnn_outputs/`、`foldx/`）
 - FoldX 要求 PDB 文件复制到工作目录，脚本已自动处理
 - 突变命名有多种格式（R1 `A_E1H`、R3 `H1E>H`、FoldX `SA40A`）。最终数据文件统一为 `HE1H` 格式；可按“突变后氨基酸 + 链/位点 + 突变后氨基酸”的方式理解。具体示例：同一个 E1→H 突变在 R1 中可写作 `A_E1H`，在 R3 中可写作 `H1E>H`，统一后记为 `HE1H`；具体转换规则见 `analysis/naming/convert.py`
-- 多 PDB 模板设计：per-template 配置在 `configs/config_foldx_n*.yaml`
+- 历史批次/节点拆分配置不保留在 live tree；需要时按 `analysis/archive/README.md` 从 git 历史恢复
 - ProteinMPNN 和 SimpleFold 通过外部子进程调用，分别需要 `proteinmpnn` 和 `simplefold` conda 环境
 - Tier 2 Step 9a/9c 需要 `pyrosetta` 环境，Step 10 需要 `simplefold` 环境，其余在主环境 `optim-pipe` 中运行
-- Tier 配置在 `configs/config.yaml` 的 `tier1`/`tier2`/`tier3` 段；旧模式配置在 `phase_c` 段
+- Tier 配置在 `configs/config.yaml` 的 `tier1`/`tier2`/`tier3` 段
 
 ## MD 分析模块（独立）
 

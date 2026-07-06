@@ -111,140 +111,6 @@ def append_wt_cache(cache_csv, pid, ph, dG):
             f.write("pdb_id,pH,dG\n")
         f.write(f"{pid},{ph},{dG}\n")
 
-def process_one_batch(bdir, cfg, wt_cache, wt_cache_csv, repaired_dir):
-    foldx = os.path.abspath(cfg["paths"]["foldx_bin"])
-    omp   = str(cfg.get("resources", {}).get("omp_threads", 1))
-    env   = {"OMP_NUM_THREADS": omp}
-
-    pid = os.path.basename(os.path.dirname(bdir))  # foldx/batches/<pid>/batch_xxx
-    template_pdb  = copy_template_if_needed(bdir, repaired_dir, pid)
-    template_noext = os.path.splitext(template_pdb)[0]          # e.g. n1-0_Repair
-    template_base  = os.path.basename(template_pdb)             # e.g. n1-0_Repair.pdb
-
-    mutfile = os.path.join(bdir, "individual_list.txt")
-    if not os.path.exists(mutfile) or os.path.getsize(mutfile) == 0:
-        print(f"[SKIP] {bdir}: individual_list.txt 缺失或为空"); 
-        return
-
-    ph_points = cfg["foldx"].get("ph_points", [7.4, 6.0])
-    nruns     = int(cfg["foldx"].get("number_of_runs", 1))
-    groups    = cfg["foldx"].get("analyse_groups", "A,B;C")
-    left_set  = set(groups.split(";")[0].split(","))
-    right_set = set(groups.split(";")[1].split(","))
-
-    # 1) BuildModel（按 pH）——生成变体
-    for ph in ph_points:
-        tag = f"build_pH{ph}"
-        cmd = [
-            foldx,
-            f"--command=BuildModel",
-            f"--pdb={template_pdb}",
-            f"--mutant-file={os.path.basename(mutfile)}",
-            f"--pH={ph}",
-            f"--numberOfRuns={nruns}",
-            f"--output-file={tag}",
-        ]
-        try:
-            run(cmd, cwd=bdir, env=env, log=os.path.join(bdir, tag))
-        except subprocess.CalledProcessError as e:
-            print(f"[WARN] BuildModel 失败: {bdir} pH={ph}: {e}")
-
-    # 2) 列出突变体
-    mpdbs = list_mutant_pdbs(bdir, pid)
-    if not mpdbs:
-        print(f"[WARN] 未发现突变体PDB：{bdir}（检查 BuildModel 输出）")
-
-    # 3) WT（模板）——优先读缓存；缺失才计算并写回缓存（只算一次/每PDB）
-    wt_ac = {}
-    for ph in ph_points:
-        key = (pid, float(ph))
-        if key in wt_cache:
-            wt_ac[ph] = wt_cache[key]
-            continue
-        # 缓存没有：在 repaired 目录计算一次并缓存
-        out_tag = f"AC_{pid}_WT_{ph}"
-        cmd = [
-            foldx,
-            f"--command=AnalyseComplex",
-            f"--pdb={template_base}",
-            f"--analyseComplexChains={groups}",
-            f"--pH={ph}",
-            f"--output-file={out_tag}",
-        ]
-        try:
-            run(cmd, cwd=repaired_dir, env=env, log=os.path.join(repaired_dir, out_tag))
-        except subprocess.CalledProcessError as e:
-            print(f"[WARN] WT AnalyseComplex 失败: {pid} pH={ph}: {e}")
-            continue
-        fx = find_interaction_file(repaired_dir, template_noext, ph)
-        if not fx:
-            print(f"[WARN] 未找到 WT Interaction 文件: {pid} pH={ph}")
-            continue
-        val = parse_ac_tsv(fx, template_base, left_set, right_set)
-        if val is None:
-            print(f"[WARN] 未能解析 WT Interaction TSV: {fx}")
-            continue
-        wt_ac[ph] = val
-        wt_cache[key] = val
-        append_wt_cache(wt_cache_csv, pid, ph, val)
-
-    # 4) 各变体在两种 pH 下的相互作用能 —— 并行化 AnalyseComplex
-    ac = {}  # (mpdb_base, ph) -> energy
-    _ac_max_procs = int(cfg.get("resources", {}).get("foldx_max_procs", 24))
-
-    def _run_one_ac(args_tuple):
-        """单个 AnalyseComplex 任务（子进程入口）"""
-        mpdb, ph, bdir_, foldx_, groups_, env_, left_set_, right_set_ = args_tuple
-        mpdb_base = os.path.basename(mpdb)
-        out_tag   = f"AC_{os.path.splitext(mpdb_base)[0]}_{ph}"
-        cmd = [
-            foldx_,
-            f"--command=AnalyseComplex",
-            f"--pdb={mpdb}",
-            f"--analyseComplexChains={groups_}",
-            f"--pH={ph}",
-            f"--output-file={out_tag}",
-        ]
-        try:
-            run(cmd, cwd=bdir_, env=env_, log=os.path.join(bdir_, out_tag))
-        except subprocess.CalledProcessError:
-            return (mpdb_base, ph, None)
-        fx = find_interaction_file(bdir_, os.path.splitext(mpdb_base)[0], ph)
-        if not fx:
-            return (mpdb_base, ph, None)
-        val = parse_ac_tsv(fx, mpdb_base, left_set_, right_set_)
-        return (mpdb_base, ph, val)
-
-    ac_tasks = []
-    for ph in ph_points:
-        for mpdb in mpdbs:
-            ac_tasks.append((mpdb, ph, bdir, foldx, groups, env, left_set, right_set))
-
-    if ac_tasks:
-        n_workers = min(_ac_max_procs, len(ac_tasks))
-        with ProcessPoolExecutor(max_workers=n_workers) as pool:
-            for mpdb_base, ph, val in pool.map(_run_one_ac, ac_tasks):
-                if val is not None:
-                    ac[(mpdb_base, ph)] = val
-
-    # 5) 汇总（含 WT/ΔΔ 项）
-    out_csv = os.path.join(bdir, "foldx_summary.csv")
-    with open(out_csv, "w") as w:
-        w.write("mpdb,dG_pH7_4,dG_pH6_0,WT_dG_pH7_4,WT_dG_pH6_0,ddG_pH7_4,ddG_pH6_0,delta,delta_wt,delta_delta\n")
-        for mpdb in mpdbs:
-            mp = os.path.basename(mpdb)
-            v74 = ac.get((mp, 7.4), "")
-            v60 = ac.get((mp, 6.0), "")
-            w74 = wt_ac.get(7.4, "")
-            w60 = wt_ac.get(6.0, "")
-            dd74 = (v74 - w74) if v74 != "" and w74 != "" else ""
-            dd60 = (v60 - w60) if v60 != "" and w60 != "" else ""
-            delt = (v60 - v74) if v60 != "" and v74 != "" else ""
-            delw = (w60 - w74) if w60 != "" and w74 != "" else ""
-            ddd  = (delt - delw) if delt != "" and delw != "" else ""
-            w.write(f"{mp},{v74},{v60},{w74},{w60},{dd74},{dd60},{delt},{delw},{ddd}\n")
-    print(f"[OK] summary -> {out_csv}")
-
 def _build_one_toplevel(args_tuple):
     """模块级：单个 BuildModel 任务。"""
     bdir_, ph_, cfg_ = args_tuple
@@ -286,18 +152,6 @@ def _ac_one_toplevel(args_tuple):
         return (bdir_, mpdb_base_, ph_, None)
     val_ = parse_ac_tsv(fx_, mpdb_base_, left_set_, right_set_)
     return (bdir_, mpdb_base_, ph_, val_)
-
-
-def _worker(args):
-    """子进程入口：处理单个 batch。"""
-    bdir, cfg, repaired_dir = args
-    # 每个子进程独立加载 WT 缓存（避免共享状态竞争）
-    wt_cache, wt_cache_csv, _ = load_wt_cache(cfg)
-    try:
-        process_one_batch(bdir, cfg, wt_cache, wt_cache_csv, repaired_dir)
-        return (bdir, None)
-    except Exception as e:
-        return (bdir, str(e))
 
 
 def main():
@@ -417,7 +271,7 @@ def main():
 
     print("[FoldX] Phase B 完成: AnalyseComplex 全部就绪")
 
-    # ── Phase C: 汇总每个 batch 的 summary CSV ─────────────────────────────────
+    # ── 汇总每个 batch 的 summary CSV ────────────────────────────────────────
     for b in batches:
         pid = os.path.basename(os.path.dirname(b))
         mpdbs = batch_mpdbs.get(b, [])

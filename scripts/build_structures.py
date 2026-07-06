@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Step 8 (Phase C): 突变体结构生成
+Step 9a (Tier 2): 突变体结构生成
 
 从候选列表 CSV 读取突变，使用 PyRosetta 或 SimpleFold 生成突变体 PDB。
 支持 FoldX 格式 (FA102H) 和统一格式 (HF102H) 的突变标注。
 
-输出到 {phase_c_dir}/structures/{rosetta,simplefold}/
+输出到 {tier2_dir}/structures/{rosetta,simplefold}/
 """
 
 import argparse
@@ -79,11 +79,11 @@ def parse_unified_mutations(mut_str, chain_map):
 
 def load_candidates(cfg):
     """
-    从 Phase C 输入 CSV 加载候选变体。
+    从 Tier 2 输入 CSV 加载候选变体。
 
     Returns: [{"variant_id": str, "mutations": [(chain, pos, wt, mut), ...]}]
     """
-    pc = cfg.get("tier2", cfg.get("phase_c", {}))
+    pc = cfg["tier2"]
     csv_path = pc["input"]["csv"]
     mut_col = pc["input"]["mutations_column"]
     fmt = pc["input"]["mutations_format"]
@@ -95,7 +95,7 @@ def load_candidates(cfg):
         raise ValueError(f"候选 CSV 缺少 '{mut_col}' 列: {csv_path}")
 
     if max_n and len(df) > max_n:
-        print(f"[Phase C] 候选 {len(df)} 行，取 top {max_n}（按 score 排序）")
+        print(f"[Tier 2] 候选 {len(df)} 行，取 top {max_n}（按 score 排序）")
         df = df.head(int(max_n))
 
     # 统一格式需要 H/L → PDB chain 映射
@@ -291,7 +291,7 @@ def build_with_simplefold(candidates, template_pdb, out_dir, sf_cfg):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Phase C Step 8: 突变体结构生成")
+    parser = argparse.ArgumentParser(description="Tier 2 Step 9a: 突变体结构生成")
     parser.add_argument("config", nargs="?", default="configs/config.yaml",
                         help="配置文件路径 (默认: configs/config.yaml)")
     parser.add_argument("--method", choices=["rosetta", "simplefold"], default=None,
@@ -301,18 +301,10 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg.get("tier2", cfg.get("phase_c", {}))
-    # 方法判断: tier2 模式下默认 rosetta; 旧模式从 structure_generation.primary 读取
-    if args.method:
-        method = args.method
-    elif "rosetta" in pc:
-        method = "rosetta"
-    elif "structure_generation" in pc:
-        method = pc["structure_generation"]["primary"]
-    else:
-        method = "rosetta"
+    pc = cfg["tier2"]
+    method = args.method or "rosetta"
 
-    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
+    pc_dir = pc["paths"].get("tier2_dir", "tier2")
     template_pdb = pc["paths"]["template_pdb"]
 
     candidates = load_candidates(cfg)
@@ -323,9 +315,7 @@ def main():
         return
 
     if method == "rosetta":
-        # tier2 模式: rosetta 配置直接在 pc["rosetta"] 下
-        # 旧模式: 在 pc["structure_generation"]["rosetta"] 下
-        ros_cfg = pc.get("rosetta", pc.get("structure_generation", {}).get("rosetta", {}))
+        ros_cfg = pc.get("rosetta", {})
         out_dir = os.path.join(pc_dir, "structures", "rosetta")
         build_with_rosetta(
             candidates, template_pdb, out_dir,
@@ -334,7 +324,7 @@ def main():
             scorefxn=ros_cfg.get("scorefxn", "ref2015"),
         )
     elif method == "simplefold":
-        sf_cfg = pc.get("simplefold", pc.get("structure_generation", {}).get("simplefold", {}))
+        sf_cfg = pc.get("simplefold", {})
         out_dir = os.path.join(pc_dir, "structures", "simplefold")
         build_with_simplefold(candidates, template_pdb, out_dir, sf_cfg)
 

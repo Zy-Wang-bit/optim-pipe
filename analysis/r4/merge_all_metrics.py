@@ -5,7 +5,7 @@ all_metrics.csv so Step 5 has model + FoldX + Rosetta + MD signals side-by-side.
 
 Inputs:
 - experiments/sdab/R4/structures/validation_metrics.csv  (16 rows, from Step 4)
-- experiments/sdab/R4/md_metrics.csv                     (16 rows, from analyze_and_compare_r4)
+- experiments/sdab/R4/md_metrics.csv                     (16 rows, prepared from compare_ph.py outputs)
 
 Output:
 - experiments/sdab/R4/structures/all_metrics.csv
@@ -45,7 +45,7 @@ def main():
     if not VAL.exists():
         sys.exit(f"[err] missing {VAL}")
     if not MD.exists():
-        sys.exit(f"[err] missing {MD} (run analyze_and_compare_r4.py first)")
+        sys.exit(f"[err] missing {MD} (prepare it from compare_ph.py outputs first)")
 
     val = pd.read_csv(VAL)
     md = pd.read_csv(MD)

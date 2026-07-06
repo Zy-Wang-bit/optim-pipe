@@ -67,7 +67,7 @@ conda activate optim-pipe
 bash run_pipeline.sh
 
 # 使用指定配置
-bash run_pipeline.sh configs/config_foldx_n1-0.yaml
+bash run_pipeline.sh configs/config_sdab_r4.yaml
 
 # 清理旧产物后重新运行
 CLEAN=1 bash run_pipeline.sh
@@ -87,19 +87,20 @@ optim-pipe/
 │
 ├── configs/                 # 配置文件
 │   ├── config.yaml          #   主配置（路径、设计参数、筛选条件）
-│   ├── config_*_n*.yaml     #   各 PDB 模板的专用配置
+│   ├── config_1e62_r4.yaml  #   1E62 R4 配置
+│   ├── config_sdab_r2.yaml  #   sdAb R2 配置
+│   ├── config_sdab_r4.yaml  #   sdAb R4 配置
 │   └── mpnn/                #   MPNN 链 ID 和固定位点配置
 │
-├── scripts/                 # 核心 pipeline 脚本（16 个模块）
+├── scripts/                 # 核心 pipeline 脚本
 │   ├── scan_interface.py    #   Step 1: 接口热点扫描
 │   ├── run_mpnn_design.py   #   Step 2: MPNN 序列设计
 │   ├── build_his_seeds.py   #   Step 2: His 种子库生成
 │   ├── run_esm_chunk.py     #   Step 3: ESM-1b 评分
 │   ├── pick_for_foldx.py    #   Step 3: 筛选候选
 │   ├── repair_pdbs.py       #   Step 4: FoldX RepairPDB
-│   ├── precompute_wt_ac.py  #   Step 5: 预计算 WT 相互作用能
-│   ├── make_mutlist_chunk.py#   Step 6: 生成 FoldX 批次
-│   ├── run_foldx_batch.py   #   Step 7: FoldX 评估
+│   ├── make_mutlist_chunk.py#   Step 5: 生成 FoldX 批次
+│   ├── run_foldx_batch.py   #   Step 6: FoldX 评估（含 WT 基线缓存）
 │   ├── tier1_filter.py      #   Step 8: Tier 1 自适应门槛筛选
 │   ├── build_structures.py  #   Step 9a: PyRosetta 突变体建模
 │   ├── run_pka.py           #   Step 9b: pKa 预测
@@ -108,14 +109,13 @@ optim-pipe/
 │   ├── run_rmsd.py          #   Step 11: CDR RMSD
 │   ├── tier2_filter.py      #   Step 12: Tier 2 pKa + RMSD 筛选
 │   ├── merge_and_rank.py    #   Step 13: Tier 3 精排
-│   ├── merge_and_select.py  #   旧模式合并筛选（向后兼容）
-│   ├── mpnn_filter_his.py   #   辅助：过滤 His 突变
 │   └── build_mutants_from_csv.py  # 辅助：从 CSV 构建突变体序列
 │
 ├── analysis/                # 后分析模块
 │   ├── pka/                 #   pKa 预测（PROPKA3 + pKAI+ 双验证）
 │   ├── rosetta/             #   Rosetta pH-score 与 dddG_elec 计算
 │   ├── structure_compare/   #   RMSD 结构比较
+│   ├── archive/             #   历史分析脚本归档和恢复说明
 │   └── elisa_vs_computation.py  # ELISA vs 计算指标关联分析
 │
 ├── experiments/             # 实验轮次数据与分析
@@ -161,9 +161,8 @@ Tier 1: 生成 + 高通量筛选                        ~10万 → ~500
   Step 2:  run_mpnn_design.py     MPNN 序列设计 + His 种子库
   Step 3:  run_esm_chunk.py       ESM-1b 评分
   Step 4:  repair_pdbs.py         FoldX RepairPDB
-  Step 5:  precompute_wt_ac.py    预计算 WT 相互作用能
-  Step 6:  make_mutlist_chunk.py  生成 FoldX 突变批次
-  Step 7:  run_foldx_batch.py     FoldX BuildModel + AnalyseComplex（双 pH）
+  Step 5:  make_mutlist_chunk.py  生成 FoldX 突变批次
+  Step 6:  run_foldx_batch.py     FoldX BuildModel + AnalyseComplex（双 pH，含 WT 基线缓存）
   Step 8:  tier1_filter.py        dG + delta 自适应门槛 → tier1_candidates.csv
 
 Tier 2: 结构评估 + 筛选（tier2.enabled 控制）       ~500 → ~100
@@ -180,7 +179,7 @@ Tier 3: 精排                                     ~100 → top-N
   Step 13: merge_and_rank.py      dddG_elec 排序 + 软标记 → final_candidates.csv
 ```
 
-`tier1.enabled: false` 时回退到旧 8 步流程（merge_and_select.py）。
+历史 8-step/Phase C 流程已移除；复跑旧结果请 checkout `d7726f1` 或 `64cfb02`。
 
 ---
 
@@ -200,7 +199,6 @@ Tier 3: 精排                                     ~100 → top-N
 | **tier1** | Tier 1 自适应筛选（目标范围、阈值、ESM 异常标记） |
 | **tier2** | Tier 2 结构评估（PyRosetta/SimpleFold 配置、pKa/RMSD 筛选阈值） |
 | **tier3** | Tier 3 精排（排序指标、软标记） |
-| **selection** | 旧模式自适应筛选（向后兼容） |
 
 ---
 

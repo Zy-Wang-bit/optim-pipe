@@ -54,26 +54,9 @@ resources:
   omp_threads: 1                 # 每进程OMP线程数（固定1）
   checkpoint_every: 2000        # 每处理N条落盘一次
 
-selection:
-  mode: adaptive
-  target_n: 10000
-  start:        { dG74_max: -3.0,  delta_min: 1.0 }
-  relax_step:   { dG74_max:  0.5,  delta_min: -0.25 }
-  floors:       { dG74_max:  1.0,  delta_min: 0.0 }
-  # 可选：连带限制 ΔΔΔG（有就用，没有就忽略）
-  # delta_delta_start: 0.5
-  # delta_delta_step:  -0.2
-  # delta_delta_floor: 0.0
-  per_pdb_max_frac: 0.40   # 单PDB最多占比
-  his_min_frac: 0.20       # 保底 his 候选占比
-  his_bonus: 0.2
-  alpha: 0.3
-  beta: 0.1
-  delta_delta_weight: 0.0
-
 # ── Tier 1: 高通量筛选（Step 8）─────────────────────────────────────────────
 tier1:
-  enabled: true                          # false 时沿用旧 merge_and_select.py
+  enabled: true
   output: "results/tier1_candidates.csv"
   adaptive:
     target_range: [300, 500]             # 自适应目标候选数范围
@@ -149,52 +132,3 @@ tier3:
     phscore_flag: true                   # 标记 pH-score 异常
     consensus_flag: true                 # 标记 pKa consensus != "agree"
   output: "results/final_candidates.csv"
-
-# ── 旧模式 Phase C（向后兼容，tier1.enabled: false 时使用）─────────────────
-phase_c:
-  enabled: false
-  max_candidates: 500
-
-  paths:
-    wt_pdb: "experiments/1E62/data/pdb/ab_wt.pdb"
-    template_pdb: "experiments/1E62/data/pdb/AF3-1E62-AeS-1.pdb"
-    phase_c_dir: "phase_c"
-
-  input:
-    csv: "results/final_top10k.csv"
-    mutations_column: "mutations"
-    mutations_format: "foldx"
-
-  chains:
-    binder: ["A", "B"]
-    target: ["C"]
-    heavy: "A"
-    light: "B"
-
-  structure_generation:
-    primary: "rosetta"
-    auxiliary: null
-    rosetta:
-      repack_shell: 8.0
-      minimize: true
-      scorefxn: "ref2015"
-    simplefold:
-      model: "simplefold_3B"
-      num_steps: 500
-      nsample_per_protein: 3
-      tau: 0.01
-
-  pka:
-    tools: ["propka", "pkai+"]
-    his_positions:
-      - { chain: "B", resid: 42 }
-      - { chain: "B", resid: 43 }
-      - { chain: "B", resid: 44 }
-
-  cdr_regions:
-    H1: { chain: "A", start: 26, end: 35 }
-    H2: { chain: "A", start: 50, end: 65 }
-    H3: { chain: "A", start: 95, end: 102 }
-    L1: { chain: "B", start: 24, end: 34 }
-    L2: { chain: "B", start: 50, end: 56 }
-    L3: { chain: "B", start: 89, end: 97 }

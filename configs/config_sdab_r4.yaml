@@ -40,8 +40,6 @@ tier2:
     H1: { chain: "A", start: 26, end: 35 }
     H2: { chain: "A", start: 50, end: 65 }
     H3: { chain: "A", start: 95, end: 112 }
-  structure_generation:
-    primary: "rosetta"
   rosetta:
     repack_shell: 8.0
     minimize: true

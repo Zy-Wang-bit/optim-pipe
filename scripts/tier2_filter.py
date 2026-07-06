@@ -145,7 +145,7 @@ def main(cfg_path):
         cfg = yaml.safe_load(f)
 
     t2 = cfg["tier2"]
-    t2_dir = t2["paths"].get("tier2_dir", t2["paths"].get("phase_c_dir", "tier2"))
+    t2_dir = t2["paths"].get("tier2_dir", "tier2")
     filter_cfg = t2["filter"]
 
     print("[Tier 2] 加载 Tier 1 候选...")

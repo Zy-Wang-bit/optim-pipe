@@ -68,19 +68,6 @@ resources:
   omp_threads: 1
   checkpoint_every: 2000
 
-selection:
-  mode: adaptive
-  target_n: 10000
-  start:        { dG74_max: -2.0,  delta_min: 0.3 }
-  relax_step:   { dG74_max:  0.5,  delta_min: -0.15 }
-  floors:       { dG74_max:  1.0,  delta_min: 0.0 }
-  per_pdb_max_frac: 1.0    # 单 PDB，不限制
-  his_min_frac: 0.50       # His 候选保底占比更高
-  his_bonus: 0.2
-  alpha: 0.3
-  beta: 0.1
-  delta_delta_weight: 0.0
-
 # ── Tier 1 ──────────────────────────────────────────────────────────────────
 tier1:
   enabled: true

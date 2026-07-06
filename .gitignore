@@ -39,8 +39,9 @@ __pycache__/
 .codex
 
 # Generated docs and delivery artifacts
-analysis/visualize/
+configs/model
 docs/slides/
+docs/superpowers/plans/
 docs/wet_lab_delivery/archive/
 docs/wet_lab_delivery/figures/
 docs/design-report/*.pdf

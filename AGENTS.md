@@ -15,7 +15,7 @@ The current biological focus is pH-sensitive engineering of anti-HBsAg antibody 
 ## Worktree Guardrails
 
 - This repository often has local experimental data and unfinished analysis changes. Run `git status --short` before editing, and never revert or overwrite unrelated user changes.
-- Keep runtime outputs out of commits. The ignored runtime directories include `results/`, `foldx/`, `phase_c/`, `tier2/`, `mpnn_outputs/`, `his_seeds/`, `esm_scores/`, `logs/`, `workspace/`, and `experiments/`.
+- Keep runtime outputs out of commits. The ignored runtime directories include `results/`, `foldx/`, `tier2/`, `mpnn_outputs/`, `his_seeds/`, `esm_scores/`, `logs/`, `workspace/`, and `experiments/`.
 - `third_party/` is generally external and ignored, except tracked code under `third_party/molecular_dynamics/`.
 - Treat `.claude/`, `.tasks/`, and `.agents/` as local agent state unless the user explicitly asks to inspect or migrate them.
 
@@ -61,7 +61,7 @@ Run from the repository root unless a script explicitly says otherwise.
 ```bash
 conda activate optim-pipe
 bash run_pipeline.sh
-bash run_pipeline.sh configs/config_foldx_n1-0.yaml
+bash run_pipeline.sh configs/config_sdab_r4.yaml
 CLEAN=1 bash run_pipeline.sh
 ```
 
@@ -109,6 +109,7 @@ This is adapted from Claude memory's "Agent Team Default" rule, but Codex only d
 
 - Default configuration path is `configs/config.yaml`; avoid hard-coded absolute paths.
 - Store experiment-round data under `experiments/<system>/<round>/` and analysis code under `analysis/`.
+- Historical one-off analysis scripts and removed workflow surfaces are indexed in `analysis/archive/README.md`; restore from git history instead of keeping duplicate live files.
 - Add new external tools under `third_party/`; keep project-owned wrappers or analysis modules outside ignored vendor payloads unless there is a clear reason.
 - All pipeline scripts are expected to run from the repository root with relative paths such as `mpnn_outputs/` and `foldx/`.
 - ProteinMPNN and SimpleFold are invoked as external subprocess tools and require their dedicated conda environments.

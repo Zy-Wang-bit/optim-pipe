@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Step 11 (Phase C): CDR RMSD 结构稳定性评估
+Step 11 (Tier 2): CDR RMSD 结构稳定性评估
 
 计算突变体与 WT 模板的全局 RMSD 和 CDR 区域 RMSD。
 支持 PyRosetta 和 SimpleFold 两种来源的结构。
@@ -181,9 +181,9 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    pc = cfg.get("tier2", cfg.get("phase_c", {}))
+    pc = cfg["tier2"]
     wt_pdb = pc["paths"].get("wt_ab_pdb", pc["paths"].get("template_pdb"))
-    pc_dir = pc["paths"].get("tier2_dir", pc["paths"].get("phase_c_dir", "tier2"))
+    pc_dir = pc["paths"].get("tier2_dir", "tier2")
     out_dir = os.path.join(pc_dir, "rmsd")
     os.makedirs(out_dir, exist_ok=True)
 
@@ -211,23 +211,6 @@ def main():
         sf3x_results = evaluate_simplefold_3x(wt_pdb, sf_dir, cdr_regions, outlier_th)
         all_results.extend(sf3x_results)
         print(f"[SimpleFold 3x] {len(sf3x_results)} 变体 (中位数)")
-
-    # 旧模式兼容: structure_generation.primary/auxiliary
-    sg = pc.get("structure_generation", {})
-    if sg and not rosetta_pdbs and not os.path.isdir(sf_dir):
-        methods = [sg.get("primary")]
-        if sg.get("auxiliary"):
-            methods.append(sg["auxiliary"])
-        for method in methods:
-            if not method:
-                continue
-            struct_dir = os.path.join(pc_dir, "structures", method)
-            pdbs = sorted(glob.glob(os.path.join(struct_dir, "*.pdb")))
-            if pdbs:
-                print(f"[{method}] {len(pdbs)} 个结构")
-                all_results.extend(
-                    evaluate_structure_set(wt_pdb, pdbs, cdr_regions, method)
-                )
 
     if not all_results:
         print("错误: 没有结构文件可评估")
