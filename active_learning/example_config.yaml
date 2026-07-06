@@ -1,0 +1,40 @@
+system_id: sdab
+round_id: R5
+wt_fasta_path: experiments/sdab/R2/data/sdab.fasta
+
+naming:
+  fasta_record_id: A
+  mutation_chain_label: H
+  ignore_chain_for_single_sequence: true
+
+objective:
+  name: ph_switch
+  formula: A7 * (1 - A6)
+  input_clip: true
+  noise_lambda: 0.0
+  normalization: reference_clip01
+
+candidate_pool:
+  mode: full_single
+  excluded_positions: []
+  excluded_mutations: []
+
+embedding:
+  embedding_model_name: ESMC-600M
+  embedding_model_version: unknown
+  embedding_layer: final
+  pooling: mean
+  embedding_dim: null
+
+model:
+  type: random_forest_regressor
+  n_estimators: 100
+  criterion: friedman_mse
+  min_samples_leaf: 1
+  bootstrap: true
+  random_state: 42
+
+acquisition:
+  policy: topk
+  kappa: 0.0
+  top_k: 24
